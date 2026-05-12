@@ -1,0 +1,165 @@
+//THIRD-PARTY LIBRARIES
+import { Router } from "express";
+
+//LOCAL FILES
+import { prisma } from "../lib/prisma";
+import { checkRateLimit, recordRequest } from "../lib/rateLimit";
+import { buildPrefData, fetchMLData, buildMLContext } from "../lib/prefHelpers";
+import { scoreRestaurant } from "../lib/personalization";
+import { requireAuth } from "../middleware/auth";
+import type { AuthRequest } from "../middleware/auth";
+
+//CONSTANTS
+const router = Router();
+
+//ROUTES
+
+/**
+ * GET /restaurants — unswiped restaurants ranked by hybrid ML score.
+ * Requires authentication. Uses the token's userId — not a query param.
+ *
+ * Pipeline:
+ *  1. Core DB reads run in parallel (candidates + preference snapshot)
+ *  2. ML data is loaded (user swipes for temporal decay + optional CF vectors)
+ *  3. Every candidate is scored; list is returned sorted by score descending
+ */
+router.get("/", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+
+    const [restaurants, pref] = await Promise.all([
+      prisma.restaurant.findMany({ where: { swipes: { none: { userId } } } }),
+      prisma.userPreference.findUnique({ where: { userId } }),
+    ]);
+
+    const prefData          = buildPrefData(pref);
+    const totalInteractions = prefData.totalLikes + prefData.totalDislikes;
+    const { userSwipes, getCFScore } = await fetchMLData(userId, totalInteractions);
+
+    const scored = restaurants
+      .map((r) => ({
+        ...r,
+        score: scoreRestaurant(r, prefData, buildMLContext(userSwipes, getCFScore(r.id))),
+      }))
+      .sort((a, b) => b.score.total - a.score.total);
+
+    return res.json(scored);
+  } catch (err) {
+    console.error("GET /restaurants error:", err);
+    return res.status(500).json({ error: "Failed to fetch restaurants" });
+  }
+});
+
+/**
+ * POST /restaurants/load — pull from Google Places API and upsert into DB.
+ * Body: { location: string, clear?: boolean }
+ * Rate-limited to 10 requests/hour per IP to stay under Google's free tier.
+ */
+router.post("/load", async (req, res) => {
+  try {
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "GOOGLE_API_KEY not configured" });
+
+    const ip =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ??
+      req.socket.remoteAddress ??
+      "unknown";
+
+    if (!checkRateLimit(ip))
+      return res.status(429).json({ error: "Rate limit: max 10 loads per hour. Try again later." });
+
+    const { location, clear } = req.body;
+    if (!location || typeof location !== "string" || !location.trim())
+      return res.status(400).json({ error: "location is required (e.g. 'San Francisco')" });
+
+    if (clear === true) await prisma.restaurant.deleteMany();
+
+    const fieldMask =
+      "places.id,places.name,places.displayName,places.formattedAddress," +
+      "places.priceLevel,places.types,places.nationalPhoneNumber," +
+      "places.photos,places.regularOpeningHours,nextPageToken";
+
+    type Place = {
+      id?: string;
+      name?: string;
+      displayName?: { text?: string };
+      formattedAddress?: string;
+      priceLevel?: string;
+      types?: string[];
+      nationalPhoneNumber?: string;
+      photos?: Array<{ name?: string }>;
+      regularOpeningHours?: { weekdayDescriptions?: string[] };
+    };
+
+    const allPlaces: Place[] = [];
+    let pageToken: string | undefined;
+
+    for (let page = 0; page < 10; page++) {
+      const body: {
+        textQuery: string;
+        includedType: string;
+        pageSize: number;
+        pageToken?: string;
+      } = { textQuery: `restaurants in ${location.trim()}`, includedType: "restaurant", pageSize: 20 };
+      if (pageToken) body.pageToken = pageToken;
+
+      const resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": fieldMask,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error("Google Places API error:", resp.status, errText);
+        if (page === 0) return res.status(502).json({ error: "Google Places API request failed" });
+        break;
+      }
+
+      const data = (await resp.json()) as { places?: Place[]; nextPageToken?: string };
+      const places = data.places ?? [];
+      allPlaces.push(...places);
+      pageToken = data.nextPageToken ?? undefined;
+      if (!pageToken || places.length === 0) break;
+
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    const priceMap: Record<string, string> = {
+      PRICE_LEVEL_INEXPENSIVE: "$",
+      PRICE_LEVEL_MODERATE:    "$$",
+      PRICE_LEVEL_EXPENSIVE:   "$$$",
+    };
+
+    let created = 0;
+    for (const p of allPlaces) {
+      const placeId    = p.id ?? p.name ?? `g_${Date.now()}_${created}`;
+      const name       = p.displayName?.text ?? "Restaurant";
+      const cuisine    = p.types?.find((t) => t !== "restaurant" && t !== "food" && t !== "point_of_interest") ?? "Restaurant";
+      const priceLevel = priceMap[p.priceLevel ?? ""] ?? "$$";
+      const address    = p.formattedAddress ?? null;
+      const phone      = p.nationalPhoneNumber ?? null;
+      const photoNames = (p.photos ?? []).map((ph) => ph.name).filter((n): n is string => !!n).slice(0, 6);
+      const openingHours = p.regularOpeningHours?.weekdayDescriptions?.join("\n") ?? null;
+
+      await prisma.restaurant.upsert({
+        where:  { yelpId: placeId },
+        create: { yelpId: placeId, name, cuisine, priceLevel, address, phone, photoNames, openingHours },
+        update: { name, cuisine, priceLevel, address, phone, photoNames, openingHours },
+      });
+      created++;
+    }
+
+    recordRequest(ip);
+    return res.json({ loaded: created, location: location.trim() });
+  } catch (err) {
+    console.error("POST /restaurants/load error:", err);
+    return res.status(500).json({ error: "Failed to load restaurants" });
+  }
+});
+
+export default router;

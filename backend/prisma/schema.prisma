@@ -1,0 +1,101 @@
+// FoodSwipe - Prisma Schema
+// Phase 1: Database + Prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Models ---
+
+model User {
+  id           String   @id @default(cuid())
+  email        String?  @unique
+  passwordHash String?
+  name         String
+  createdAt    DateTime @default(now())
+  swipes         Swipe[]
+  preference     UserPreference?
+  refreshTokens  RefreshToken[]
+
+  @@map("users")
+}
+
+model UserPreference {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  likedCuisines   Json     @default("{}") // { "thai": 5, "italian": 3, ... }
+  dislikedCuisines Json    @default("{}") // { "seafood": 2, ... }
+  priceCounts     Json     @default("{}") // { "$": 1, "$$": 8, "$$$": 3 }
+  avgDistance      Float   @default(0)
+  totalLikes       Int    @default(0)
+  totalDislikes    Int    @default(0)
+  morningLikes     Int    @default(0) // 6am-11am
+  afternoonLikes   Int    @default(0) // 11am-5pm
+  eveningLikes     Int    @default(0) // 5pm-10pm
+  lateNightLikes   Int    @default(0) // 10pm-6am
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model Restaurant {
+  id         String   @id @default(cuid())
+  yelpId     String?  @unique // Google Place ID - for dedup when re-loading
+  name       String
+  cuisine    String
+  priceLevel String   // e.g. "$", "$$", "$$$"
+  address    String?
+  phone        String?
+  photoNames   String[] // Google Places photo resource names for /places/photo proxy (multiple for food/interior)
+  openingHours String? // e.g. "Monday: 9am–5pm\nTuesday: 9am–5pm..."
+  createdAt   DateTime @default(now())
+  swipes     Swipe[]
+
+  @@map("restaurants")
+}
+
+enum SwipeDirection {
+  LIKE
+  DISLIKE
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Swipe {
+  id           String         @id @default(cuid())
+  userId       String
+  restaurantId String
+  direction    SwipeDirection
+  visitedAt    DateTime?      // When user marked "Been here"
+  experience   String?        // e.g. "great", "good", "okay", "disappointing"
+  notes        String?        // User's own notes
+  createdAt    DateTime       @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, restaurantId])
+  @@index([userId])
+  @@index([restaurantId])
+  @@map("swipes")
+}

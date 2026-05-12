@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+node_modules.nosync/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build
+dist/
+.next/
+out/
+
+# Misc
+.DS_Store
+*.log
