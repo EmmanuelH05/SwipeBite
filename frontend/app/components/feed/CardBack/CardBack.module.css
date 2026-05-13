@@ -1,0 +1,28 @@
+.cardBack {
+  position: absolute;
+  inset-inline: 0;
+  top: 0.625rem;
+  z-index: 0;
+  transform-origin: top;
+  transform: scale(0.95);
+  overflow: hidden;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(44, 36, 32, 0.4);
+  background: #0e0c0a;
+  opacity: 0.4;
+  pointer-events: none;
+  aspect-ratio: 3 / 4;
+}
+
+.photo {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  filter: brightness(0.5);
+}
+
+.placeholder {
+  height: 100%;
+  width: 100%;
+  background: #161210;
+}

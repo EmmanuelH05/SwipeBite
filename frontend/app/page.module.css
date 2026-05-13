@@ -1,0 +1,127 @@
+/* Auth loading skeleton */
+.authLoading {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  background: #0a0806;
+  padding: 1.5rem;
+}
+
+.authLoadingSkeleton {
+  width: 100%;
+  max-width: 24rem;
+}
+
+.skeletonCard {
+  border-radius: 1rem;
+  border: 1px solid #2c2420;
+  background: #161210;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.skeletonLogoRow {
+  margin: 0 auto;
+  height: 2.75rem;
+  width: 10rem;
+  border-radius: 0.75rem;
+}
+
+.skeletonTagline {
+  margin: 0 auto;
+  height: 1rem;
+  width: 12rem;
+  border-radius: 0.5rem;
+}
+
+.skeletonField {
+  height: 3rem;
+  width: 100%;
+  border-radius: 0.75rem;
+}
+
+/* Error banner */
+.errorBanner {
+  margin-bottom: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.05);
+  padding: 0.75rem;
+  animation: fadeIn 0.3s ease-out both;
+}
+
+.errorText {
+  font-size: 0.875rem;
+  color: #ef4444;
+  margin: 0;
+}
+
+/* Feed section */
+.feedSection {
+  min-height: 18.75rem;
+  width: 100%;
+}
+
+/* Card skeleton */
+.cardSkeleton {
+  border-radius: 1.5rem;
+  border: 1px solid #2c2420;
+  background: #161210;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* Empty state */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 0;
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+.emptyIcon {
+  display: flex;
+  width: 4rem;
+  height: 4rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #161210;
+  border: 1px solid #2c2420;
+  margin-bottom: 1rem;
+  color: #3c3228;
+}
+
+.emptyTitle {
+  font-size: 0.875rem;
+  color: #5c504a;
+  margin: 0;
+}
+
+.emptyHint {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #3c3228;
+  margin: 0.25rem 0 0;
+}
+
+/* Matches section */
+.matchesSection {
+  min-height: 12.5rem;
+  width: 100%;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

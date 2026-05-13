@@ -1,0 +1,87 @@
+.wrapper {
+  width: 100%;
+}
+
+.field {
+  position: relative;
+  width: 100%;
+}
+
+.input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid #2c2420;
+  background: #161210;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: #f6f0e8;
+  transition: all 0.2s ease-out;
+  outline: none;
+  line-height: 1.5;
+}
+
+.input::placeholder {
+  color: #5c504a;
+}
+
+.input:hover {
+  border-color: #3c3228;
+}
+
+.input:focus {
+  border-color: rgba(249, 115, 22, 0.5);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.08);
+}
+
+.input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input.hasLeft {
+  padding-left: 2.5rem;
+}
+
+.input.hasRight {
+  padding-right: 2.5rem;
+}
+
+.input.error {
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.input.error:focus {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
+}
+
+.iconLeft,
+.iconRight {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #5c504a;
+  display: flex;
+  align-items: center;
+}
+
+.iconLeft {
+  left: 0.875rem;
+}
+
+.iconRight {
+  right: 0.875rem;
+}
+
+.errorText {
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  color: #ef4444;
+  animation: fadeIn 0.3s ease-out both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

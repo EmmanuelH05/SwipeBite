@@ -1,0 +1,222 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem;
+}
+
+@media (min-width: 640px) {
+  .backdrop {
+    align-items: center;
+  }
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+}
+
+.panel {
+  position: relative;
+  width: 100%;
+  max-width: 28rem;
+  border-radius: 1.5rem;
+  border: 1px solid #2c2420;
+  background: #161210;
+  padding: 1.5rem;
+  box-shadow: 0 0 80px rgba(0, 0, 0, 0.7);
+}
+
+.closeBtn {
+  position: absolute;
+  right: 1rem;
+  top: 1rem;
+  display: flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #201a16;
+  border: none;
+  cursor: pointer;
+  color: #5c504a;
+  transition: all 0.2s;
+}
+
+.closeBtn:hover {
+  color: #f6f0e8;
+  background: #2c2420;
+}
+
+.title {
+  padding-right: 2rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #f6f0e8;
+  margin: 0;
+}
+
+.subtitle {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: #5c504a;
+}
+
+/* View mode */
+.viewBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.experienceRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 1rem;
+  background: #201a16;
+  border: 1px solid #2c2420;
+  padding: 0.75rem 1rem;
+}
+
+.experienceEmoji {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.experienceLabel {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5c504a;
+}
+
+.experienceValue {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #f6f0e8;
+  margin-top: 0.1rem;
+}
+
+.notesLabel {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5c504a;
+  margin-bottom: 0.375rem;
+}
+
+.notesText {
+  white-space: pre-wrap;
+  border-radius: 1rem;
+  background: #201a16;
+  border: 1px solid #2c2420;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: #9a8a78;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.noReview {
+  font-size: 0.875rem;
+  color: #5c504a;
+}
+
+/* Edit/Add mode */
+.editBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.sectionLabel {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5c504a;
+  margin-bottom: 0.75rem;
+}
+
+.ratingGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+.ratingBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 1rem;
+  border: 1px solid #2c2420;
+  background: #201a16;
+  padding: 0.75rem 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #5c504a;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ratingBtn:hover {
+  color: #9a8a78;
+  border-color: #3c3228;
+  background: #261f1b;
+}
+
+.ratingBtn.selected {
+  border-color: rgba(249, 115, 22, 0.4);
+  background: rgba(249, 115, 22, 0.12);
+  color: #f97316;
+}
+
+.ratingEmoji {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.notesInput {
+  width: 100%;
+  min-height: 5.5rem;
+  resize: vertical;
+  border-radius: 1rem;
+  border: 1px solid #2c2420;
+  background: #201a16;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: #f6f0e8;
+  line-height: 1.6;
+  outline: none;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.notesInput::placeholder {
+  color: #3c3228;
+}
+
+.notesInput:focus {
+  border-color: rgba(249, 115, 22, 0.4);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.08);
+}
+
+/* Footers */
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

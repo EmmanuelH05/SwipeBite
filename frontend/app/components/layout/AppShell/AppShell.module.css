@@ -1,0 +1,77 @@
+.page {
+  position: relative;
+  display: flex;
+  min-height: 100vh;
+  align-items: flex-start;
+  justify-content: center;
+  background: #0a0806;
+}
+
+@media (min-width: 640px) {
+  .page {
+    align-items: center;
+    padding: 1.5rem;
+  }
+}
+
+.glow {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.glowLeft {
+  position: absolute;
+  left: -10rem;
+  top: 25%;
+  height: 31.25rem;
+  width: 31.25rem;
+  border-radius: 9999px;
+  background: rgba(249, 115, 22, 0.05);
+  filter: blur(120px);
+}
+
+.glowRight {
+  position: absolute;
+  right: -10rem;
+  bottom: 25%;
+  height: 31.25rem;
+  width: 31.25rem;
+  border-radius: 9999px;
+  background: rgba(234, 88, 12, 0.04);
+  filter: blur(100px);
+}
+
+.main {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  width: 100%;
+  max-width: 24rem;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #0d0b09;
+}
+
+@media (min-width: 640px) {
+  .main {
+    min-height: 0;
+    border-radius: 1.5rem;
+    border: 1px solid #2c2420;
+    background: rgba(22, 18, 16, 0.98);
+    box-shadow: 0 0 100px rgba(0, 0, 0, 0.7);
+  }
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .inner {
+    padding: 1.5rem;
+  }
+}

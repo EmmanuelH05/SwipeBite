@@ -1,0 +1,133 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 0.2s ease-out;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── Variants ─────────────────────────────── */
+
+.primary {
+  background: linear-gradient(to right, #f97316, #ea580c);
+  color: #fff;
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  box-shadow: 0 2px 12px rgba(249, 115, 22, 0.15);
+}
+
+.primary:hover {
+  background: linear-gradient(to right, #fb923c, #f97316);
+  box-shadow: 0 0 28px rgba(249, 115, 22, 0.4);
+}
+
+.primary:active {
+  transform: scale(0.97);
+}
+
+.secondary {
+  background: #1e1815;
+  color: #f6f0e8;
+  border: 1px solid #2c2420;
+}
+
+.secondary:hover {
+  background: #261f1b;
+  border-color: #3c3228;
+}
+
+.secondary:active {
+  transform: scale(0.97);
+}
+
+.outline {
+  background: transparent;
+  color: #9a8a78;
+  border: 1px solid #2c2420;
+}
+
+.outline:hover {
+  color: #f6f0e8;
+  border-color: #4c3c30;
+  background: #1e1815;
+}
+
+.outline:active {
+  transform: scale(0.97);
+}
+
+.ghost {
+  background: transparent;
+  color: #9a8a78;
+  border: 1px solid transparent;
+}
+
+.ghost:hover {
+  color: #f6f0e8;
+  background: #1e1815;
+}
+
+.ghost:active {
+  transform: scale(0.97);
+}
+
+.pass {
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.pass:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.2);
+}
+
+.pass:active {
+  transform: scale(0.97);
+}
+
+.like {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.like:hover {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.5);
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.2);
+}
+
+.like:active {
+  transform: scale(0.97);
+}
+
+.danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.danger:active {
+  transform: scale(0.97);
+}
