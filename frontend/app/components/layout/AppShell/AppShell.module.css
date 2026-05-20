@@ -1,16 +1,20 @@
 .page {
   position: relative;
   display: flex;
-  min-height: 100vh;
+  min-height: 100dvh;
   align-items: flex-start;
   justify-content: center;
-  background: #0a0806;
+  background: #080604;
+  background-image:
+    radial-gradient(ellipse 100% 55% at 50% 100%, rgba(249, 115, 22, 0.13) 0%, transparent 60%),
+    radial-gradient(ellipse 70%  40% at 15% 60%,  rgba(249, 115, 22, 0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 50%  30% at 85% 20%,  rgba(234, 88,  12, 0.05) 0%, transparent 50%);
 }
 
 @media (min-width: 640px) {
   .page {
     align-items: center;
-    padding: 1.5rem;
+    padding: 2rem;
   }
 }
 
@@ -23,24 +27,24 @@
 
 .glowLeft {
   position: absolute;
-  left: -10rem;
-  top: 25%;
-  height: 31.25rem;
-  width: 31.25rem;
+  left: -8rem;
+  top: 20%;
+  height: 40rem;
+  width: 40rem;
   border-radius: 9999px;
-  background: rgba(249, 115, 22, 0.05);
-  filter: blur(120px);
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.09) 0%, transparent 70%);
+  filter: blur(80px);
 }
 
 .glowRight {
   position: absolute;
-  right: -10rem;
-  bottom: 25%;
-  height: 31.25rem;
-  width: 31.25rem;
+  right: -8rem;
+  bottom: 10%;
+  height: 32rem;
+  width: 32rem;
   border-radius: 9999px;
-  background: rgba(234, 88, 12, 0.04);
-  filter: blur(100px);
+  background: radial-gradient(circle, rgba(234, 88, 12, 0.07) 0%, transparent 70%);
+  filter: blur(70px);
 }
 
 .main {
@@ -48,30 +52,39 @@
   z-index: 10;
   display: flex;
   width: 100%;
-  max-width: 24rem;
+  max-width: 26rem;
   flex-direction: column;
-  min-height: 100vh;
-  background: #0d0b09;
+  min-height: 100dvh;
+  background: #0a0806;
+  overflow: hidden;
 }
 
 @media (min-width: 640px) {
   .main {
     min-height: 0;
-    border-radius: 1.5rem;
-    border: 1px solid #2c2420;
-    background: rgba(22, 18, 16, 0.98);
-    box-shadow: 0 0 100px rgba(0, 0, 0, 0.7);
+    max-height: 90dvh;
+    border-radius: 2rem;
+    border: 1px solid rgba(249, 115, 22, 0.1);
+    background: rgba(12, 9, 6, 0.98);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.5),
+      0 40px 120px rgba(0, 0, 0, 0.8),
+      0 0 80px rgba(249, 115, 22, 0.05);
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 }
 
+/* Padded wrapper — header/nav/search live here */
 .inner {
   display: flex;
   flex-direction: column;
-  padding: 1.25rem;
+  padding: 1rem 1.25rem 0;
+  flex: 1;
 }
 
 @media (min-width: 640px) {
   .inner {
-    padding: 1.5rem;
+    padding: 1.25rem 1.5rem 0;
   }
 }

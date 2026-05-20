@@ -1,7 +1,7 @@
 "use client";
 
-import { forwardRef } from "react";
-import { getPhotoUrl, formatCuisine } from "../../../lib/utils";
+import { forwardRef, useState } from "react";
+import { getPhotoUrl, formatCuisine, getOpenStatus } from "../../../lib/utils";
 import type { Restaurant } from "../../../lib/types";
 import styles from "./SwipeCard.module.css";
 
@@ -30,7 +30,10 @@ const SwipeCard = forwardRef<HTMLDivElement, SwipeCardProps>(function SwipeCard(
   ref
 ) {
   const photoNames = restaurant.photoNames ?? [];
-  const score = restaurant.score;
+  const score      = restaurant.score;
+  const openStatus = getOpenStatus(restaurant.openingHours);
+  const [failedPhotos, setFailedPhotos] = useState<Set<string>>(new Set());
+  const visiblePhotos = photoNames.filter((n) => !failedPhotos.has(n));
 
   const likeOpacity = dragOffset > OVERLAY_START
     ? Math.min(1, (dragOffset - OVERLAY_START) / (OVERLAY_FULL - OVERLAY_START)) : 0;
@@ -51,9 +54,9 @@ const SwipeCard = forwardRef<HTMLDivElement, SwipeCardProps>(function SwipeCard(
       onMouseDown={onMouseDown}
     >
       {/* Photos */}
-      {photoNames.length > 0 ? (
+      {visiblePhotos.length > 0 ? (
         <div ref={photoScrollRef} className={styles.photoStrip} onScroll={onPhotoScroll}>
-          {photoNames.map((name, i) => (
+          {visiblePhotos.map((name, i) => (
             <img
               key={name}
               src={getPhotoUrl(name)}
@@ -61,22 +64,27 @@ const SwipeCard = forwardRef<HTMLDivElement, SwipeCardProps>(function SwipeCard(
               className={styles.photo}
               loading={i === 0 ? "eager" : "lazy"}
               draggable={false}
+              onError={() => setFailedPhotos((prev) => new Set([...prev, name]))}
             />
           ))}
         </div>
       ) : (
         <div className={styles.noPhoto}>
-          <svg className={styles.noPhotoIcon} width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          <div className={styles.noPhotoGradient} />
+          <svg className={styles.noPhotoIcon} width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+            <path d="M3 9l2.45-2.45a2 2 0 012.83 0L10 8.34M10 8.34L14 4.34M10 8.34l4.24 4.24M3 9v11a1 1 0 001 1h16a1 1 0 001-1V9" strokeOpacity="0.3" />
+            <path d="M21 15l-5-5-3 3" strokeOpacity="0.25" />
+            <circle cx="16" cy="8" r="1.5" strokeOpacity="0.25" />
           </svg>
-          <p className={styles.noPhotoText}>No photo available</p>
+          <p className={styles.noPhotoName}>{restaurant.name}</p>
+          <p className={styles.noPhotoText}>{formatCuisine(restaurant.cuisine)} · {restaurant.priceLevel}</p>
         </div>
       )}
 
       {/* Nav dots — full width, no other elements at same row */}
-      {photoNames.length > 1 && (
+      {visiblePhotos.length > 1 && (
         <div className={styles.navDots}>
-          {photoNames.map((_, i) => (
+          {visiblePhotos.map((_, i) => (
             <button
               key={i}
               type="button"
@@ -92,7 +100,22 @@ const SwipeCard = forwardRef<HTMLDivElement, SwipeCardProps>(function SwipeCard(
       <div className={styles.gradient} />
       <div className={styles.info}>
         <div>
-          <h2 className={styles.name}>{restaurant.name}</h2>
+          <div className={styles.nameRow}>
+            <h2 className={styles.name}>{restaurant.name}</h2>
+            {restaurant.phone && (
+              <a
+                href={`tel:${restaurant.phone}`}
+                className={styles.callBtn}
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`Call ${restaurant.name}`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.1 1.18 2 2 0 012.11 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z" />
+                </svg>
+                Call
+              </a>
+            )}
+          </div>
           <div className={styles.meta}>
             <span className={styles.chip}>{formatCuisine(restaurant.cuisine ?? "Restaurant")}</span>
             <span className={styles.chip}>{restaurant.priceLevel}</span>
@@ -100,6 +123,11 @@ const SwipeCard = forwardRef<HTMLDivElement, SwipeCardProps>(function SwipeCard(
               <span className={`${styles.scoreChip} ${scoreClass}`}>
                 <span className={styles.scoreDotInline} />
                 {Math.round(score.total)}% match
+              </span>
+            )}
+            {openStatus.label && (
+              <span className={`${styles.openChip} ${openStatus.open === true ? styles.openYes : openStatus.open === false ? styles.openNo : ""}`}>
+                {openStatus.label}
               </span>
             )}
             {restaurant.address && (

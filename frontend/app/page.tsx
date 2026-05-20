@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { API_URL, TOKEN_KEY, SWIPE_THRESHOLD, GESTURE_LOCK_THRESHOLD } from "./lib/constants";
 import type { Restaurant, Match, User } from "./lib/types";
 import { getAuthHeaders, apiFetch, setTokens, clearTokens, getRefreshToken } from "./lib/utils";
+import { AnimatePresence } from "framer-motion";
 import AuthScreen from "./components/auth/AuthScreen/AuthScreen";
 import AppShell from "./components/layout/AppShell/AppShell";
 import Header from "./components/layout/Header/Header";
@@ -12,6 +13,9 @@ import LoadRestaurantsForm from "./components/feed/LoadRestaurantsForm/LoadResta
 import CardStack from "./components/feed/CardStack/CardStack";
 import MatchList from "./components/matches/MatchList/MatchList";
 import VisitModal from "./components/modal/VisitModal/VisitModal";
+import TasteSetupFlow from "./components/onboarding/TasteSetupFlow/TasteSetupFlow";
+import MatchReveal from "./components/feed/MatchReveal/MatchReveal";
+import type { ScoreBreakdown } from "./lib/types";
 import styles from "./page.module.css";
 
 export default function Home() {
@@ -32,6 +36,9 @@ export default function Home() {
   const [loadLoading, setLoadLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // --- Match reveal overlay ---
+  const [pendingReveal, setPendingReveal] = useState<{ restaurant: Restaurant; score: ScoreBreakdown } | null>(null);
 
   // --- Visit modal ---
   const [visitModal, setVisitModal] = useState<Match | null>(null);
@@ -181,6 +188,10 @@ export default function Home() {
           ...prev,
           { restaurant, swipeId: created.id, visitedAt: created.visitedAt ?? null },
         ]);
+        // Show score reveal if the restaurant has a meaningful score
+        if (restaurant.score && restaurant.score.total > 0) {
+          setPendingReveal({ restaurant, score: restaurant.score });
+        }
       }
     } catch {
       setError("Failed to record swipe");
@@ -355,7 +366,7 @@ export default function Home() {
     try {
       const res = await apiFetch(`${API_URL}/restaurants/load`, {
         method: "POST",
-        body: JSON.stringify({ location: location.trim(), clear: true }),
+        body: JSON.stringify({ location: location.trim() }),
       });
       const text = await res.text();
       let data: { error?: string; loaded?: number } = {};
@@ -432,6 +443,22 @@ export default function Home() {
     }
   };
 
+  // --- Onboarding ---
+  const handleOnboardingComplete = async (cuisines: string[], priceLevel: string) => {
+    try {
+      await apiFetch(`${API_URL}/onboarding/seed`, {
+        method: "PATCH",
+        body: JSON.stringify({ cuisines, priceLevel }),
+      });
+    } catch { /* non-critical */ }
+    await apiFetch(`${API_URL}/auth/me/onboarding`, { method: "PATCH" });
+    setUser((u) => u ? { ...u, hasCompletedOnboarding: true } : u);
+  };
+
+  const handleOnboardingSkip = () => {
+    setUser((u) => u ? { ...u, hasCompletedOnboarding: true } : u);
+  };
+
   const handleLogout = () => {
     const rt = getRefreshToken();
     if (rt) {
@@ -490,6 +517,16 @@ export default function Home() {
   // --- Render: Feed + Matches ---
   return (
     <AppShell>
+      {/* Onboarding overlay — shown once for new users, covers the whole shell */}
+      <AnimatePresence>
+        {userId && user && !user.hasCompletedOnboarding && (
+          <TasteSetupFlow
+            onComplete={handleOnboardingComplete}
+            onSkip={handleOnboardingSkip}
+          />
+        )}
+      </AnimatePresence>
+
       <Header onLogout={handleLogout} userName={user?.name} />
       <NavTabs view={view} matchesCount={matches.length} onViewChange={setView} />
 
@@ -523,33 +560,45 @@ export default function Home() {
                 <p className={styles.emptyHint}>Check your saved spots or search a new area</p>
               </div>
             ) : (
-              <CardStack
-                current={restaurants[0]}
-                next={restaurants[1] ?? null}
-                cardRef={cardRef}
-                swipeCardProps={{
-                  photoIndex,
-                  photoScrollRef,
-                  onPhotoScroll: handlePhotoScroll,
-                  goToPhoto,
-                  style: {
-                    transform: swipeExit
-                      ? swipeExit === "LIKE"
-                        ? "translateX(120%) rotate(12deg)"
-                        : "translateX(-120%) rotate(-12deg)"
-                      : `translateX(${cardDragOffset}px) rotate(${cardDragOffset * 0.06}deg)`,
-                    transition: swipeExit ? "transform 0.2s ease-out" : "none",
-                  },
-                  dragOffset: cardDragOffset,
-                  onPass: () => restaurants[0] && handleSwipe(restaurants[0].id, "DISLIKE"),
-                  onLike: () => restaurants[0] && handleSwipe(restaurants[0].id, "LIKE"),
-                  disabled: loading,
-                  onTouchStart: handleTouchStart,
-                  onTouchMove: handleTouchMove,
-                  onTouchEnd: handleTouchEnd,
-                  onMouseDown: handleMouseDown,
-                }}
-              />
+              <div style={{ position: "relative" }}>
+                <CardStack
+                  current={restaurants[0]}
+                  next={restaurants[1] ?? null}
+                  cardRef={cardRef}
+                  swipeCardProps={{
+                    photoIndex,
+                    photoScrollRef,
+                    onPhotoScroll: handlePhotoScroll,
+                    goToPhoto,
+                    style: {
+                      transform: swipeExit
+                        ? swipeExit === "LIKE"
+                          ? "translateX(120%) rotate(12deg)"
+                          : "translateX(-120%) rotate(-12deg)"
+                        : `translateX(${cardDragOffset}px) rotate(${cardDragOffset * 0.06}deg)`,
+                      transition: swipeExit ? "transform 0.2s ease-out" : "none",
+                    },
+                    dragOffset: cardDragOffset,
+                    onPass: () => restaurants[0] && handleSwipe(restaurants[0].id, "DISLIKE"),
+                    onLike: () => restaurants[0] && handleSwipe(restaurants[0].id, "LIKE"),
+                    disabled: loading,
+                    onTouchStart: handleTouchStart,
+                    onTouchMove: handleTouchMove,
+                    onTouchEnd: handleTouchEnd,
+                    onMouseDown: handleMouseDown,
+                  }}
+                />
+                {/* Score reveal overlay — positioned over the card area */}
+                <AnimatePresence>
+                  {pendingReveal && (
+                    <MatchReveal
+                      restaurant={pendingReveal.restaurant}
+                      score={pendingReveal.score}
+                      onDismiss={() => setPendingReveal(null)}
+                    />
+                  )}
+                </AnimatePresence>
+              </div>
             )}
           </section>
         </>

@@ -1,5 +1,5 @@
-/** Backend API base URL (no trailing slash). */
-export const API_URL = "http://localhost:4000";
+/** Backend API base URL (no trailing slash). Set NEXT_PUBLIC_API_URL in production. */
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 /** localStorage key for the short-lived access token (JWT, 15 min). */
 export const TOKEN_KEY = "swipebite_token";

@@ -1,26 +1,27 @@
 /* Auth loading skeleton */
 .authLoading {
   display: flex;
-  min-height: 100vh;
+  min-height: 100dvh;
   align-items: center;
   justify-content: center;
-  background: #0a0806;
+  background: #080604;
   padding: 1.5rem;
 }
 
 .authLoadingSkeleton {
   width: 100%;
-  max-width: 24rem;
+  max-width: 22rem;
 }
 
 .skeletonCard {
-  border-radius: 1rem;
-  border: 1px solid #2c2420;
-  background: #161210;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(249, 115, 22, 0.1);
+  background: rgba(26, 20, 16, 0.97);
   padding: 2rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.125rem;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
 }
 
 .skeletonLogoRow {
@@ -32,46 +33,45 @@
 
 .skeletonTagline {
   margin: 0 auto;
-  height: 1rem;
-  width: 12rem;
+  height: 0.875rem;
+  width: 11rem;
   border-radius: 0.5rem;
 }
 
 .skeletonField {
-  height: 3rem;
+  height: 3.25rem;
   width: 100%;
-  border-radius: 0.75rem;
+  border-radius: 0.875rem;
 }
 
 /* Error banner */
 .errorBanner {
-  margin-bottom: 1rem;
-  border-radius: 0.75rem;
+  margin: 0 1.25rem 0.875rem;
+  border-radius: 0.875rem;
   border: 1px solid rgba(239, 68, 68, 0.2);
-  background: rgba(239, 68, 68, 0.05);
-  padding: 0.75rem;
-  animation: fadeIn 0.3s ease-out both;
+  background: rgba(239, 68, 68, 0.06);
+  padding: 0.75rem 1rem;
 }
 
 .errorText {
-  font-size: 0.875rem;
-  color: #ef4444;
+  font-size: 0.8125rem;
+  color: #f87171;
   margin: 0;
 }
 
-/* Feed section */
+/* Feed section — breaks out of AppShell inner padding for edge-to-edge card */
 .feedSection {
-  min-height: 18.75rem;
   width: 100%;
+  flex: 1;
 }
 
 /* Card skeleton */
 .cardSkeleton {
-  border-radius: 1.5rem;
-  border: 1px solid #2c2420;
-  background: #161210;
+  border-radius: 0;
+  background: rgba(22, 18, 14, 0.8);
   overflow: hidden;
   height: 100%;
+  aspect-ratio: 3 / 4;
 }
 
 /* Empty state */
@@ -80,45 +80,40 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem 0;
+  padding: 5rem 2rem;
   animation: fadeInUp 0.5s ease-out both;
 }
 
 .emptyIcon {
   display: flex;
-  width: 4rem;
-  height: 4rem;
+  width: 4.5rem;
+  height: 4.5rem;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: #161210;
-  border: 1px solid #2c2420;
-  margin-bottom: 1rem;
-  color: #3c3228;
+  background: rgba(249, 115, 22, 0.07);
+  border: 1px solid rgba(249, 115, 22, 0.14);
+  margin-bottom: 1.25rem;
+  color: rgba(249, 115, 22, 0.45);
 }
 
 .emptyTitle {
-  font-size: 0.875rem;
+  font-size: 1rem;
+  font-weight: 600;
   color: #5c504a;
   margin: 0;
 }
 
 .emptyHint {
-  margin-top: 0.25rem;
-  font-size: 0.75rem;
+  margin-top: 0.375rem;
+  font-size: 0.8125rem;
   color: #3c3228;
-  margin: 0.25rem 0 0;
 }
 
 /* Matches section */
 .matchesSection {
-  min-height: 12.5rem;
+  padding: 0 1.25rem 1.5rem;
   width: 100%;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes fadeInUp {

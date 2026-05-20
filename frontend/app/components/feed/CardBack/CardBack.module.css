@@ -1,15 +1,15 @@
 .cardBack {
   position: absolute;
-  inset-inline: 0;
-  top: 0.625rem;
+  inset-inline: 0.875rem;
+  top: 0.75rem;
   z-index: 0;
   transform-origin: top;
-  transform: scale(0.95);
+  transform: scale(0.97);
   overflow: hidden;
-  border-radius: 1.5rem;
-  border: 1px solid rgba(44, 36, 32, 0.4);
+  border-radius: 1.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
   background: #0e0c0a;
-  opacity: 0.4;
+  opacity: 0.5;
   pointer-events: none;
   aspect-ratio: 3 / 4;
 }
@@ -18,11 +18,11 @@
   height: 100%;
   width: 100%;
   object-fit: cover;
-  filter: brightness(0.5);
+  filter: brightness(0.4) saturate(0.7);
 }
 
 .placeholder {
   height: 100%;
   width: 100%;
-  background: #161210;
+  background: #100d0a;
 }

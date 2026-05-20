@@ -168,13 +168,21 @@ export function buildWeightedProfile(swipes: SwipeRecord[]): WeightedProfile {
 
     if (swipe.direction === "LIKE") {
       const qualityW = visitQualityMultiplier(swipe.experience);
-      const w = timeW * qualityW;
-      likedClusters[cluster] = (likedClusters[cluster] ?? 0) + w;
-      priceCounts[swipe.restaurant.priceLevel] =
-        (priceCounts[swipe.restaurant.priceLevel] ?? 0) + w;
-      totalWeightedLikes += w;
+
+      if (swipe.experience === "disappointing") {
+        // User LIKED it but visited and hated it — flip to active dislike signal
+        const w = timeW * 1.5;
+        dislikedClusters[cluster] = (dislikedClusters[cluster] ?? 0) + w;
+        totalWeightedDislikes += w;
+      } else {
+        const w = timeW * qualityW;
+        likedClusters[cluster] = (likedClusters[cluster] ?? 0) + w;
+        priceCounts[swipe.restaurant.priceLevel] =
+          (priceCounts[swipe.restaurant.priceLevel] ?? 0) + w;
+        totalWeightedLikes += w;
+      }
     } else {
-      // For dislikes, "disappointing" after a visit means we should push harder
+      // "disappointing" on a DISLIKE visit confirms and amplifies the signal
       const qualityW = swipe.experience === "disappointing" ? 2.0 : 1.0;
       const w = timeW * qualityW;
       dislikedClusters[cluster] = (dislikedClusters[cluster] ?? 0) + w;
@@ -227,17 +235,31 @@ export function buildUserVectors(allSwipes: AllSwipeRecord[]): Map<string, UserV
   return vectors;
 }
 
-// Cosine similarity between two sparse user vectors.
-// Only looks at restaurants both users have rated (the overlap / "shared" set).
-function cosineSimilarity(a: UserVector, b: UserVector): number {
+// Pearson correlation between two sparse user vectors.
+// Requires at least MIN_CO_RATED shared restaurants to avoid noise from tiny overlap.
+// Pearson handles sparse binary ratings better than cosine — it centers each user's
+// mean so that rating style (mostly LIKE vs. balanced) doesn't pollute similarity.
+const MIN_CO_RATED = 3;
+
+function pearsonSimilarity(a: UserVector, b: UserVector): number {
   const keysB = new Set(Object.keys(b));
   const shared = Object.keys(a).filter((k) => keysB.has(k));
-  if (shared.length === 0) return 0; // no overlap → can't compare
+  if (shared.length < MIN_CO_RATED) return 0;
 
-  const dot = shared.reduce((sum, k) => sum + a[k] * b[k], 0);
-  const magA = Math.sqrt(Object.values(a).reduce((s, v) => s + v * v, 0));
-  const magB = Math.sqrt(Object.values(b).reduce((s, v) => s + v * v, 0));
-  return magA === 0 || magB === 0 ? 0 : dot / (magA * magB);
+  const n = shared.length;
+  const meanA = shared.reduce((s, k) => s + a[k], 0) / n;
+  const meanB = shared.reduce((s, k) => s + b[k], 0) / n;
+
+  let num = 0, denA = 0, denB = 0;
+  for (const k of shared) {
+    const da = a[k] - meanA;
+    const db = b[k] - meanB;
+    num += da * db;
+    denA += da * da;
+    denB += db * db;
+  }
+  if (denA === 0 || denB === 0) return 0;
+  return num / Math.sqrt(denA * denB);
 }
 
 const MIN_SWIPES_FOR_CF = 5; // not enough data below this
@@ -253,13 +275,13 @@ export function computeCFScore(
   // If the user hasn't swiped enough, skip CF entirely
   if (!targetVec || Object.keys(targetVec).length < MIN_SWIPES_FOR_CF) return null;
 
-  // Gather neighbours who have actually rated this restaurant
+  // Gather neighbours who have rated this restaurant and share enough overlap with us
   const neighbours: Array<{ similarity: number; rating: number }> = [];
   for (const [uid, vec] of cfVectors) {
     if (uid === targetUserId) continue;
-    if (!(restaurantId in vec)) continue; // this neighbour hasn't seen the restaurant
+    if (!(restaurantId in vec)) continue;
 
-    const sim = cosineSimilarity(targetVec, vec);
+    const sim = pearsonSimilarity(targetVec, vec);
     if (sim > 0.05) neighbours.push({ similarity: sim, rating: vec[restaurantId] });
   }
 
@@ -278,43 +300,45 @@ export function computeCFScore(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECTION 6: UCB Exploration Bonus
+// SECTION 6: Thompson Sampling Exploration
 //
-// There's a classic problem in RL called the "exploration-exploitation tradeoff."
-// If we only show users what the model thinks they'll like, we never discover
-// new preferences — the user might actually love Thai food but we never show it
-// because we don't have enough data.
+// UCB1 is deterministic — given the same state, every user sees the same
+// exploration bonus, which causes the feed to feel mechanical. Thompson Sampling
+// is probabilistic: it draws a sample from a Beta distribution for each cuisine
+// cluster, producing naturally diverse exploration that decays gracefully as
+// data accumulates.
 //
-// UCB1 (Upper Confidence Bound) solves this from multi-armed bandit theory.
-// The idea: each cuisine type is an "arm" of a slot machine. The exploration
-// bonus for each arm is: sqrt(2 * ln(N) / n_i)
-//   N  = total swipes so far
-//   n_i = swipes on this specific cuisine
+// For our binary LIKE/DISLIKE case, the Beta distribution is the conjugate prior
+// for the Bernoulli likelihood — the math fits perfectly:
+//   α = weighted_likes + 1    (successes + prior)
+//   β = weighted_dislikes + 1 (failures + prior)
 //
-// When n_i is small relative to N, the bonus is large — we're uncertain, so
-// we should explore. As n_i grows, the bonus shrinks — we've gathered enough data.
+// Drawing Beta(α, β) samples what we'd expect the like-probability to be for
+// this cuisine cluster. High uncertainty (few data points) → wide distribution
+// → high variance → natural exploration. High certainty → narrow distribution
+// → score converges to the true preference.
 //
-// I normalize the result to [0, 1] so it blends cleanly with the other scores.
+// Uses Johnk's method for exact Beta sampling — no external dependencies.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function computeUCBExploration(
+function betaSample(alpha: number, beta: number): number {
+  // Johnk's method: exact for alpha, beta >= 1
+  for (;;) {
+    const x = Math.pow(Math.random(), 1 / alpha);
+    const y = Math.pow(Math.random(), 1 / beta);
+    if (x + y <= 1) return x / (x + y);
+  }
+}
+
+export function computeThompsonExploration(
   cuisine: string,
   likedClusters: Record<string, number>,
-  dislikedClusters: Record<string, number>,
-  totalInteractions: number
+  dislikedClusters: Record<string, number>
 ): number {
-  if (totalInteractions === 0) return 0.7; // cold start: give everything a decent exploration bonus
-
   const cluster = normalizeCuisine(cuisine);
-  const nCluster = (likedClusters[cluster] ?? 0) + (dislikedClusters[cluster] ?? 0);
-
-  // UCB1 formula
-  const logN = Math.log(totalInteractions + 1);
-  const ucb = Math.sqrt((2 * logN) / (nCluster + 1));
-
-  // Normalize: divide by the maximum possible value (when n_i = 0)
-  const maxUCB = Math.sqrt(2 * logN);
-  return maxUCB > 0 ? Math.min(ucb / maxUCB, 1) : 0.5;
+  const alpha = (likedClusters[cluster] ?? 0) + 1; // Beta prior: 1 pseudocount
+  const beta  = (dislikedClusters[cluster] ?? 0) + 1;
+  return betaSample(alpha, beta);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -413,18 +437,20 @@ function timeMlScore(
   return { score: 0.55, reason: null };
 }
 
-// Signal weights — two sets so we can gracefully handle no-CF case
-const W_CF     = { cuisine: 0.28, price: 0.15, time: 0.10, cf: 0.30, exploration: 0.17 };
-const W_NO_CF  = { cuisine: 0.40, price: 0.20, time: 0.13, exploration: 0.27 };
+// Signal weights — two sets so we can gracefully handle no-CF case.
+// Time weight is low: the timeMlScore is coarse (hour buckets only) and the
+// per-user time-of-day counters aren't yet fed into this path.
+const W_CF     = { cuisine: 0.32, price: 0.18, time: 0.08, cf: 0.28, exploration: 0.14 };
+const W_NO_CF  = { cuisine: 0.45, price: 0.22, time: 0.10, exploration: 0.23 };
 
 export function hybridScore(input: MLScoreInput): MLScoreBreakdown {
   const { restaurant, weightedProfile, cfScore, totalInteractions, currentHour = new Date().getHours() } = input;
   const { likedClusters, dislikedClusters, priceCounts } = weightedProfile;
 
-  const cuisine    = computeClusterCuisineScore(restaurant.cuisine, likedClusters, dislikedClusters);
-  const price      = priceMlScore(restaurant.priceLevel, priceCounts);
-  const time       = timeMlScore(currentHour, restaurant.openingHours);
-  const exploration = computeUCBExploration(restaurant.cuisine, likedClusters, dislikedClusters, totalInteractions);
+  const cuisine     = computeClusterCuisineScore(restaurant.cuisine, likedClusters, dislikedClusters);
+  const price       = priceMlScore(restaurant.priceLevel, priceCounts);
+  const time        = timeMlScore(currentHour, restaurant.openingHours);
+  const exploration = computeThompsonExploration(restaurant.cuisine, likedClusters, dislikedClusters);
 
   let rawTotal: number;
   const reasons: Array<string | null> = [cuisine.reason, price.reason, time.reason];

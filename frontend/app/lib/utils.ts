@@ -106,3 +106,56 @@ export function formatCuisine(raw: string): string {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(" ");
 }
+
+/** Parse opening hours string and return open status for right now. */
+export function getOpenStatus(openingHours: string | null | undefined): {
+  label: string;
+  open: boolean | null; // null = unknown
+} {
+  if (!openingHours) return { label: "", open: null };
+
+  const lower = openingHours.toLowerCase();
+  if (lower.includes("24 hours") || lower.includes("open 24")) return { label: "Open 24h", open: true };
+
+  const days = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+  const today = days[new Date().getDay()];
+  const now   = new Date().getHours() * 60 + new Date().getMinutes();
+
+  // Find today's line (e.g. "Monday: 11:00 AM – 10:00 PM")
+  const line = openingHours.split("\n").find((l) => l.toLowerCase().startsWith(today));
+  if (!line) return { label: "", open: null };
+
+  if (line.toLowerCase().includes("closed")) return { label: "Closed today", open: false };
+
+  // Parse "11:00 AM – 10:00 PM" style ranges
+  const rangeMatch = line.match(/(\d{1,2}:\d{2}\s*[AP]M)\s*[–\-]\s*(\d{1,2}:\d{2}\s*[AP]M)/i);
+  if (!rangeMatch) return { label: "", open: null };
+
+  const toMin = (t: string) => {
+    const m = t.match(/(\d{1,2}):(\d{2})\s*([AP]M)/i);
+    if (!m) return 0;
+    let h = parseInt(m[1]);
+    const min = parseInt(m[2]);
+    const pm = m[3].toUpperCase() === "PM";
+    if (pm && h !== 12) h += 12;
+    if (!pm && h === 12) h = 0;
+    return h * 60 + min;
+  };
+
+  const open  = toMin(rangeMatch[1]);
+  let   close = toMin(rangeMatch[2]);
+  if (close < open) close += 24 * 60; // past midnight
+
+  if (now < open) {
+    const h = Math.floor(open / 60), mn = open % 60;
+    const ampm = h >= 12 ? "PM" : "AM";
+    const disp = `${h > 12 ? h - 12 : h || 12}:${String(mn).padStart(2, "0")} ${ampm}`;
+    return { label: `Opens ${disp}`, open: false };
+  }
+  if (now >= close) return { label: "Closed now", open: false };
+
+  const h = Math.floor(close / 60) % 24, mn = close % 60;
+  const ampm = h >= 12 ? "PM" : "AM";
+  const disp = `${h > 12 ? h - 12 : h || 12}:${String(mn).padStart(2, "0")} ${ampm}`;
+  return { label: `Open until ${disp}`, open: true };
+}

@@ -17,5 +17,8 @@ out/
 *.log
 
 # Documentation (not tracked)
-*.md
 docs/
+*.md
+!CLAUDE.md
+!backend/.env.example
+!**/README.md

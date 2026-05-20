@@ -1,0 +1,108 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  border-radius: 1.75rem;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bgFallback {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, #1c1410 0%, #0e0a08 100%);
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 100% 100% at 50% 50%, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.82) 100%);
+}
+
+.content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+/* ── Score badge ─────────────────────────────────────────────────────────── */
+
+.scoreBadge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  border-radius: 9999px;
+  width: 7rem;
+  height: 7rem;
+  justify-content: center;
+  border: 3px solid;
+}
+
+.scoreBadge.high {
+  border-color: rgba(34, 197, 94, 0.7);
+  background: rgba(34, 197, 94, 0.15);
+  box-shadow: 0 0 40px rgba(34, 197, 94, 0.3);
+}
+
+.scoreBadge.mid {
+  border-color: rgba(249, 115, 22, 0.7);
+  background: rgba(249, 115, 22, 0.15);
+  box-shadow: 0 0 40px rgba(249, 115, 22, 0.3);
+}
+
+.scoreBadge.low {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+.scoreNumber {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.scoreWord {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ── Explanation ─────────────────────────────────────────────────────────── */
+
+.explanation {
+  font-size: 0.9375rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
+  max-width: 16rem;
+  line-height: 1.5;
+}
+
+.hint {
+  font-size: 0.6875rem;
+  color: rgba(255, 255, 255, 0.3);
+  margin: 0;
+  letter-spacing: 0.05em;
+}

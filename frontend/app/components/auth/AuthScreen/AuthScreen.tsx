@@ -29,7 +29,11 @@ function validateEmail(email: string): string | undefined {
 
 function validatePassword(password: string, mode: AuthMode): string | undefined {
   if (!password) return "Password is required";
-  if (mode === "signup" && password.length < 6) return "Password must be at least 6 characters";
+  if (mode === "signup") {
+    if (password.length < 8) return "Password must be at least 8 characters";
+    if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter";
+    if (!/[0-9]/.test(password)) return "Password must contain at least one number";
+  }
 }
 
 function validateName(name: string): string | undefined {
@@ -134,7 +138,7 @@ export default function AuthScreen({
               value={password}
               onChange={(e) => onPasswordChange(e.target.value)}
               onBlur={() => setTouched((t) => ({ ...t, password: true }))}
-              placeholder={mode === "signup" ? "Password (min 6 chars)" : "Password"}
+              placeholder={mode === "signup" ? "Password (min 8 chars, A-Z, 0-9)" : "Password"}
               disabled={loading}
               autoComplete={mode === "signup" ? "new-password" : "current-password"}
               error={passwordError}
@@ -172,7 +176,9 @@ export default function AuthScreen({
               className={styles.switchBtn}
               onClick={() => { setTouched({}); onSwitchMode(); }}
             >
-              {mode === "signup" ? "Already have an account? Sign in" : "Need an account? Sign up"}
+              {mode === "signup"
+                ? <>Already have an account? <span>Sign in</span></>
+                : <>New here? <span>Create an account</span></>}
             </button>
           </div>
         </div>

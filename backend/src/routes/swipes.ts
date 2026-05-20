@@ -4,6 +4,7 @@ import { Router } from "express";
 //LOCAL FILES
 import { prisma } from "../lib/prisma";
 import { updatePreferencesOnSwipe, type UserPreferenceData } from "../lib/personalization";
+import { invalidateCFCache } from "../lib/prefHelpers";
 import { requireAuth } from "../middleware/auth";
 import type { AuthRequest } from "../middleware/auth";
 
@@ -31,6 +32,9 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     if (!restaurant) return res.status(404).json({ error: "Restaurant not found" });
 
     const swipe = await prisma.swipe.create({ data: { userId, restaurantId, direction } });
+
+    // Invalidate CF vector cache so the next feed request reflects this swipe
+    invalidateCFCache();
 
     //ASYNC PREFERENCE UPDATE
     // Fire-and-forget — doesn't block the response

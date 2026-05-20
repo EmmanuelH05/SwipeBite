@@ -52,10 +52,15 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
 
 /**
  * POST /restaurants/load — pull from Google Places API and upsert into DB.
- * Body: { location: string, clear?: boolean }
+ * Body: { location: string }
  * Rate-limited to 10 requests/hour per IP to stay under Google's free tier.
+ * Requires authentication to protect the Google Places API key quota.
+ *
+ * Restaurants are upserted (not cleared) — the catalog is a shared additive
+ * pool keyed on Google Place ID, which enables collaborative filtering to work
+ * across users who see the same restaurant IDs.
  */
-router.post("/load", async (req, res) => {
+router.post("/load", requireAuth, async (req: AuthRequest, res) => {
   try {
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "GOOGLE_API_KEY not configured" });
@@ -68,11 +73,9 @@ router.post("/load", async (req, res) => {
     if (!checkRateLimit(ip))
       return res.status(429).json({ error: "Rate limit: max 10 loads per hour. Try again later." });
 
-    const { location, clear } = req.body;
+    const { location } = req.body;
     if (!location || typeof location !== "string" || !location.trim())
       return res.status(400).json({ error: "location is required (e.g. 'San Francisco')" });
-
-    if (clear === true) await prisma.restaurant.deleteMany();
 
     const fieldMask =
       "places.id,places.name,places.displayName,places.formattedAddress," +

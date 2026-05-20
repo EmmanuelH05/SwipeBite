@@ -8,6 +8,45 @@ import {
   type AllSwipeRecord,
 } from "./ml-recommender";
 
+// ─── CF Vector Cache ──────────────────────────────────────────────────────────
+// Rebuilding the user-item matrix from 3000 global swipes on every feed request
+// is O(swipes) per request. This module-level cache amortizes that cost across
+// all requests within a 5-minute window. Single-instance only — if you scale
+// to multiple processes, replace with Redis and pub/sub invalidation.
+
+const CF_CACHE_TTL_MS = 5 * 60 * 1000;
+
+type CFCacheEntry = {
+  vectors: ReturnType<typeof buildUserVectors>;
+  builtAt: number;
+};
+
+let cfVectorCache: CFCacheEntry | null = null;
+
+async function getGlobalCFVectors(): Promise<ReturnType<typeof buildUserVectors>> {
+  if (cfVectorCache && Date.now() - cfVectorCache.builtAt < CF_CACHE_TTL_MS) {
+    return cfVectorCache.vectors;
+  }
+  const raw = await prisma.swipe.findMany({
+    take:    3000,
+    orderBy: { createdAt: "desc" },
+    select:  { userId: true, restaurantId: true, direction: true },
+  });
+  const records: AllSwipeRecord[] = raw.map((s) => ({
+    userId:       s.userId,
+    restaurantId: s.restaurantId,
+    direction:    s.direction as "LIKE" | "DISLIKE",
+  }));
+  const vectors = buildUserVectors(records);
+  cfVectorCache = { vectors, builtAt: Date.now() };
+  return vectors;
+}
+
+/** Invalidate the CF vector cache — call after any swipe is recorded. */
+export function invalidateCFCache(): void {
+  cfVectorCache = null;
+}
+
 //TYPES
 type RawPref = {
   likedCuisines:    unknown;
@@ -66,19 +105,13 @@ export async function fetchMLData(
     orderBy: { createdAt: "desc" },
   });
 
-  const globalSwipesPromise =
-    totalInteractions >= 5
-      ? prisma.swipe.findMany({
-          take:    3000,
-          orderBy: { createdAt: "desc" },
-          select:  { userId: true, restaurantId: true, direction: true },
-        })
-      : Promise.resolve(null);
+  // CF vectors come from the module-level cache — O(1) on cache hit, O(3000) on miss.
+  // Only fetch when the user has enough swipes to produce meaningful neighbours.
+  const cfVectorsPromise = totalInteractions >= 5
+    ? getGlobalCFVectors()
+    : Promise.resolve(null);
 
-  const [userSwipesRaw, globalSwipesRaw] = await Promise.all([
-    userSwipesPromise,
-    globalSwipesPromise,
-  ]);
+  const [userSwipesRaw, cfVectors] = await Promise.all([userSwipesPromise, cfVectorsPromise]);
 
   const userSwipes: SwipeRecord[] = userSwipesRaw.map((s) => ({
     direction:  s.direction as "LIKE" | "DISLIKE",
@@ -87,18 +120,8 @@ export async function fetchMLData(
     createdAt:  s.createdAt,
   }));
 
-  let cfVectors: ReturnType<typeof buildUserVectors> | null = null;
-  if (globalSwipesRaw) {
-    const records: AllSwipeRecord[] = globalSwipesRaw.map((s) => ({
-      userId:       s.userId,
-      restaurantId: s.restaurantId,
-      direction:    s.direction as "LIKE" | "DISLIKE",
-    }));
-    cfVectors = buildUserVectors(records);
-  }
-
   const getCFScore = cfVectors
-    ? (rid: string) => computeCFScore(userId, rid, cfVectors!)
+    ? (rid: string) => computeCFScore(userId, rid, cfVectors)
     : () => null;
 
   return { userSwipes, getCFScore };

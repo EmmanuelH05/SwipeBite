@@ -34,6 +34,12 @@ const AUTH_LIMIT     = 10;
 const AUTH_WINDOW_MS = 15 * 60 * 1000;
 const authAttempts   = new Map<string, { count: number; resetAt: number }>();
 
+// Tighter limit for /refresh — legitimate clients call it at most once per access-token
+// lifetime (15 min), so 20 requests per 15-min window per IP is generous while still
+// blocking automated token-cycling attacks.
+const REFRESH_LIMIT     = 20;
+const refreshAttempts   = new Map<string, { count: number; resetAt: number }>();
+
 //HELPERS
 
 /** Returns client IP, respecting reverse-proxy forwarding headers. */
@@ -57,6 +63,23 @@ function recordAuthAttempt(ip: string): void {
   const entry = authAttempts.get(ip);
   if (!entry || Date.now() > entry.resetAt) {
     authAttempts.set(ip, { count: 1, resetAt: Date.now() + AUTH_WINDOW_MS });
+  } else {
+    entry.count++;
+  }
+}
+
+/** Returns true when the IP is within the refresh-endpoint quota. */
+function checkRefreshLimit(ip: string): boolean {
+  const entry = refreshAttempts.get(ip);
+  if (!entry || Date.now() > entry.resetAt) return true;
+  return entry.count < REFRESH_LIMIT;
+}
+
+/** Increments the refresh attempt counter for an IP. */
+function recordRefreshAttempt(ip: string): void {
+  const entry = refreshAttempts.get(ip);
+  if (!entry || Date.now() > entry.resetAt) {
+    refreshAttempts.set(ip, { count: 1, resetAt: Date.now() + AUTH_WINDOW_MS });
   } else {
     entry.count++;
   }
@@ -177,8 +200,13 @@ router.post("/login", async (req: AuthRequest, res) => {
  * The old token is revoked immediately (token rotation prevents replay attacks).
  * Body: { refreshToken: string }
  */
-router.post("/refresh", async (req, res) => {
+router.post("/refresh", async (req: AuthRequest, res) => {
   try {
+    const ip = clientIp(req);
+    if (!checkRefreshLimit(ip))
+      return res.status(429).json({ error: "Too many requests. Please wait a few minutes." });
+    recordRefreshAttempt(ip);
+
     const { refreshToken } = req.body;
     if (!refreshToken || typeof refreshToken !== "string")
       return res.status(400).json({ error: "refreshToken is required" });
@@ -232,7 +260,7 @@ router.get("/me", async (req: AuthRequest, res) => {
 
     const user = await prisma.user.findUnique({
       where:  { id: req.userId },
-      select: { id: true, email: true, name: true, createdAt: true },
+      select: { id: true, email: true, name: true, createdAt: true, hasCompletedOnboarding: true },
     });
     if (!user) return res.status(404).json({ error: "User not found" });
 
@@ -240,6 +268,21 @@ router.get("/me", async (req: AuthRequest, res) => {
   } catch (err) {
     console.error("GET /auth/me error:", err);
     return res.status(500).json({ error: "Failed to get user" });
+  }
+});
+
+/** PATCH /auth/me/onboarding — mark onboarding complete */
+router.patch("/me/onboarding", async (req: AuthRequest, res) => {
+  try {
+    if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
+    await prisma.user.update({
+      where: { id: req.userId },
+      data:  { hasCompletedOnboarding: true },
+    });
+    return res.json({ hasCompletedOnboarding: true });
+  } catch (err) {
+    console.error("PATCH /auth/me/onboarding error:", err);
+    return res.status(500).json({ error: "Failed to update onboarding status" });
   }
 });
 
