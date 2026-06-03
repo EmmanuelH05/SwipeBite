@@ -49,14 +49,15 @@ Monorepo with two independent packages: [`frontend/`](./frontend) and [`backend/
 
 ## Run locally
 
-**Prerequisites:** Node 20+, a PostgreSQL database, a Google Places API (New) key.
+**Prerequisites:** Node 20+ and a PostgreSQL database. (A Google Places API key is *optional* — only needed to load more restaurants beyond the seeded catalog.)
 
 ```bash
 # Backend
 cd backend
 npm install
-cp .env.example .env          # fill DATABASE_URL, JWT_SECRET (openssl rand -hex 32), GOOGLE_API_KEY
+cp .env.example .env          # fill DATABASE_URL, JWT_SECRET (openssl rand -hex 32)
 npm run db:migrate            # apply Prisma migrations
+npm run db:seed               # load a starter catalog (24 restaurants, no API key needed)
 npm run dev                   # http://localhost:4000
 
 # Frontend (separate terminal)
@@ -90,10 +91,9 @@ SwipeBite deploys as **frontend on Vercel** + **backend & Postgres on Render** (
 ### 1. Database + backend — Render (blueprint)
 
 1. Push this repo to GitHub.
-2. In Render → **New → Blueprint**, point it at this repo. `render.yaml` provisions a free Postgres instance and the Express API, and wires `DATABASE_URL` automatically.
-3. Set the two secrets Render prompts for: `JWT_SECRET` (use `openssl rand -hex 32`) and `GOOGLE_API_KEY`.
-4. After the first deploy, open a shell on the service and run `npx prisma migrate deploy`.
-5. Copy the service URL, e.g. `https://swipebite-api.onrender.com`.
+2. In Render → **New → Blueprint**, point it at this repo. `render.yaml` provisions a free Postgres instance and the Express API, wires `DATABASE_URL` automatically, and the build **auto-runs migrations and seeds the catalog** — so the app is usable the moment it's live.
+3. Set the one required secret Render prompts for: `JWT_SECRET` (use `openssl rand -hex 32`). `GOOGLE_API_KEY` is optional — leave it blank unless you want users to load more restaurants.
+4. Copy the service URL, e.g. `https://swipebite-api.onrender.com`.
 
 ### 2. Frontend — Vercel
 
