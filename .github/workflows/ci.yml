@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend — typecheck & unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+        env:
+          # Prisma config reads these at load time; no real DB is contacted by `generate`.
+          DATABASE_URL: postgresql://user:pass@localhost:5432/swipebite
+          JWT_SECRET: ci-placeholder
+      - name: Typecheck
+        run: npm run typecheck
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/swipebite
+      - name: Unit tests
+        run: npm test
+
+  frontend:
+    name: Frontend — production build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - name: Build
+        run: npx next build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+          NEXT_TELEMETRY_DISABLED: "1"
