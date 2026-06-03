@@ -2,7 +2,9 @@
 
 **Tinder-style restaurant discovery.** Swipe `LIKE` / `DISLIKE` on nearby restaurants, build a taste profile as you go, and get a feed that re-ranks itself in real time using a hybrid recommendation engine — content-based filtering, user-to-user collaborative filtering, and Thompson Sampling exploration — written from scratch in plain TypeScript.
 
-> **Live demo:** _add your deployed URL here_ · **Architecture & invariants:** [`CLAUDE.md`](./CLAUDE.md)
+> **🔗 Live demo:** **[frontend-livid-ten-37.vercel.app](https://frontend-livid-ten-37.vercel.app)** · **Architecture & invariants:** [`CLAUDE.md`](./CLAUDE.md)
+>
+> Frontend on Vercel · API + Postgres on Render. Register an account and start swiping — the catalog is pre-seeded.
 
 Built end-to-end by directing **Claude Code**, then reviewing and correcting every diff.
 
