@@ -375,12 +375,13 @@ export function computeClusterCuisineScore(
 // SECTION 8: Hybrid Scoring — putting it all together
 //
 // The final score blends all the signals above. I use different weights depending
-// on whether we have CF data or not:
+// on whether we have CF data or not (these match the W_CF / W_NO_CF constants
+// below and are asserted in ml-recommender.test.ts):
 //
-//   WITH CF:    cuisine 28% + price 15% + time 10% + CF 30% + exploration 17%
-//   WITHOUT CF: cuisine 40% + price 20% + time 13% + exploration 27%
+//   WITH CF:    cuisine 32% + price 18% + time 8% + CF 28% + exploration 14%
+//   WITHOUT CF: cuisine 45% + price 22% + time 10% + exploration 23%
 //
-// The CF signal gets a big chunk (30%) because "similar users liked this" is
+// The CF signal gets a big chunk (28%) because "similar users liked this" is
 // really strong evidence. When CF isn't available yet (new user, sparse data),
 // content-based and exploration fill the gap.
 // ─────────────────────────────────────────────────────────────────────────────
