@@ -7,6 +7,7 @@ import cors from "cors";
 
 //LOCAL FILES
 import { authMiddleware } from "./middleware/auth";
+import { getMissingRequiredVars, isWeakSecretUnsafe } from "./lib/startupChecks";
 import authRouter            from "./routes/auth";
 import restaurantsRouter     from "./routes/restaurants";
 import swipesRouter          from "./routes/swipes";
@@ -20,15 +21,12 @@ const app  = express();
 const PORT = process.env.PORT ?? 4000;
 
 // Fail fast if required env vars are missing or still set to placeholder values
-const REQUIRED_VARS = ["DATABASE_URL", "JWT_SECRET"];
-const WEAK_SECRETS  = ["dev-secret-change-in-prod", "change-me-in-production-use-openssl-rand-hex-32"];
-for (const key of REQUIRED_VARS) {
-  if (!process.env[key]) {
-    console.error(`[startup] Missing required env var: ${key}`);
-    process.exit(1);
-  }
+const missing = getMissingRequiredVars(process.env, ["DATABASE_URL", "JWT_SECRET"]);
+if (missing.length > 0) {
+  console.error(`[startup] Missing required env var(s): ${missing.join(", ")}`);
+  process.exit(1);
 }
-if (process.env.NODE_ENV === "production" && WEAK_SECRETS.includes(process.env.JWT_SECRET!)) {
+if (isWeakSecretUnsafe(process.env.NODE_ENV, process.env.JWT_SECRET)) {
   console.error("[startup] JWT_SECRET is a placeholder — run: openssl rand -hex 32");
   process.exit(1);
 }
