@@ -12,7 +12,7 @@ Tinder-style restaurant discovery app. Users swipe LIKE/DISLIKE on restaurants, 
 |-------|------|
 | Frontend | Next.js 16 (App Router), React 19, TypeScript, CSS Modules, Tailwind CSS v4 (tokens only) |
 | Backend | Express 5, Node.js, TypeScript, Prisma ORM, PostgreSQL (Supabase) |
-| Auth | JWT access tokens (15 min) + DB-stored refresh tokens (7 days, rotated on use) |
+| Auth | JWT access tokens (15 min) + DB-stored refresh tokens (7 days, hashed with SHA-256, rotated on use) |
 | Recommendations | Hybrid score: cuisine cluster match + price affinity + time-of-day + CF (Pearson similarity, ≥5 swipes) + Thompson Sampling exploration |
 | Photos | Backend proxy at `/places/photo?name=...` — keeps Google API key server-side |
 
@@ -30,6 +30,9 @@ npm run dev            # nodemon + tsx, port 4000
 # Frontend (separate terminal)
 cd frontend && npm install
 npm run dev            # Next.js dev server, port 3000
+
+# Backend tests
+cd backend && bun test
 ```
 
 `bun` works as a drop-in for `npm` on all scripts.
@@ -96,11 +99,15 @@ docker build --build-arg NEXT_PUBLIC_API_URL=https://api.your-domain.com \
 
 - **Restaurant table is a shared additive catalog** — `POST /restaurants/load` upserts (never deletes). Two users loading the same city merge their results. The catalog grows over time; users see only unswiped restaurants.
 - **`NEXT_PUBLIC_API_URL` is embedded at Next.js build time** — changing it requires a rebuild. Set it via `--build-arg` in Docker or as an env var before `npm run build`.
-- **Backend startup fails fast** on missing `DATABASE_URL` / `JWT_SECRET` or on placeholder JWT secret in production (`NODE_ENV=production`).
+- **Backend startup fails fast** on missing `DATABASE_URL` / `JWT_SECRET`, or on a placeholder JWT secret in any `NODE_ENV` other than `development` — fail-closed, not an allowlist of `NODE_ENV=production` only (`lib/startupChecks.ts`).
 - **CORS is locked** to `FRONTEND_URL` — set this env var before deploying or CORS will block all API calls from the frontend.
 - **CF vector cache is module-level (in-process)** — 5-minute TTL, invalidated on every swipe. Single-instance only. Multi-instance deployments need Redis.
+- **Preference-counter updates (swipes, disappointing-visit bumps, onboarding seed) are atomic per user** — `lib/preferenceStore.ts` wraps the read-modify-write in a DB transaction serialized via a Postgres advisory lock (`pg_advisory_xact_lock`). Two swipes fired close together no longer race on the same stale counters.
+- **`/places/photo` has no auth on purpose** — the frontend renders it as a plain `<img src>`, which can't send an Authorization header. Rate-limited per IP instead; don't add `requireAuth` here without checking every consumer first.
 - **Tokens are in `localStorage`** — XSS-accessible; HttpOnly cookies would be more secure but require backend cookie handling.
-- **Score explanation is already rendered** on the swipe card (`SwipeCard.tsx` lines 111–118).
+- **Refresh tokens are hashed (SHA-256) before storage** — the DB never holds a usable raw token. Deploying this changed the stored format: any refresh token issued before that deploy no longer matches.
+- **Score explanation is rendered** on the swipe card (`SwipeCard.tsx`, the `explanation`/`explanationLabel`/`explanationText` block).
+- **`page.tsx` is composition only** — auth, feed, swipe-gesture, and visit-modal state each live in their own hook under `frontend/app/hooks/`.
 - **`yelpId` column stores Google Place IDs** — naming mismatch from original scaffolding. Don't rename without a migration.
 
 ---
@@ -113,6 +120,7 @@ The scoring pipeline lives in `backend/src/lib/`:
 ml-recommender.ts    — pure scoring math (clustering, decay, CF, Thompson Sampling)
 personalization.ts   — bridge: DB types → scorer; also updatePreferencesOnSwipe
 prefHelpers.ts       — DB queries + CF vector cache + MLContext assembly
+preferenceStore.ts   — atomic (advisory-lock) apply of updatePreferencesOnSwipe to the DB
 ```
 
 **Score weights:**
@@ -135,11 +143,13 @@ These are deferred — valid but not deployment-blocking:
 
 | # | Issue | When to fix |
 |---|-------|-------------|
-| 1 | **Zero tests** | After data model stabilizes; start with `ml-recommender.ts` (pure functions) |
-| 2 | **`page.tsx` is 580 lines** | After tests exist — gesture system uses 6 entangled refs, unsafe to split without a regression net |
-| 3 | **No pagination** on `GET /restaurants` | When restaurant count grows large (hundreds per user) |
-| 4 | **In-memory rate limiting** doesn't survive restarts | When scaling to multiple instances → swap for Redis |
-| 5 | **`yelpId` naming mismatch** | Low urgency — migration required, Prisma may generate destructive DROP+ADD |
-| 6 | **Tokens in `localStorage`** | If XSS becomes a concern; requires adding cookie handling to Express |
-| 7 | **CF cold-start UX** | Add 5-card onboarding swipe flow to get new users past the 5-swipe CF threshold immediately |
-| 8 | **Per-user score cache** | Once real users exist; see `prefHelpers.ts` for implementation sketch |
+| 1 | **No pagination** on `GET /restaurants` | When restaurant count grows large (hundreds per user) |
+| 2 | **In-memory rate limiting + CF cache** don't survive restarts, single-instance only | When scaling to multiple instances → swap both for Redis |
+| 3 | **`yelpId` naming mismatch** | Low urgency — migration required, Prisma may generate destructive DROP+ADD |
+| 4 | **Tokens in `localStorage`** | If XSS becomes a concern; requires adding cookie handling to Express |
+| 5 | **CF cold-start UX** | Onboarding already seeds an initial profile (`TasteSetupFlow`) — still no "still learning your taste" qualifier on the score badge itself for users under the 5-swipe CF threshold |
+| 6 | **Per-user score cache** | Once real users exist; see `prefHelpers.ts` for implementation sketch |
+| 7 | **Swipe undo/rewind** | Needs a new backend endpoint; not just a UI change |
+| 8 | **Two pre-existing `react-hooks/set-state-in-effect` lint errors** (`useAuth.ts`, `useSwipeGesture.ts`) | Doesn't block `next build`; fixing needs a live browser to verify the effect restructuring doesn't change loading-skeleton/reset timing |
+
+**Test coverage:** `backend/src/lib/*.test.ts` covers `ml-recommender.ts` (the actual differentiator), `auth.ts`, `rateLimit.ts`, `startupChecks.ts`, and one route (`photos.ts`). Not covered: routes needing a live DB (`auth.ts`'s register/login/refresh flow, `swipes.ts`) — the configured `DATABASE_URL` was unreachable in the environment these were written in ("tenant not found" from Supabase, likely a paused free-tier project); revisit once that's resolved. Frontend has no test script yet — out of scope so far.

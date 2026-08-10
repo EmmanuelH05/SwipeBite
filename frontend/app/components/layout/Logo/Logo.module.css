@@ -23,9 +23,10 @@
 }
 
 .wordmark {
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: #f6f0e8;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+  text-transform: uppercase;
 }
 
 .wordmark.sizeAuth {
@@ -37,7 +38,7 @@
 }
 
 .accent {
-  color: #f97316;
+  color: var(--color-text-primary);
 }
 
 @keyframes fadeIn {
