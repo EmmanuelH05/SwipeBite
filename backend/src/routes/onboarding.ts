@@ -3,7 +3,8 @@ import { Router } from "express";
 
 //LOCAL FILES
 import { prisma }                    from "../lib/prisma";
-import { updatePreferencesOnSwipe, type UserPreferenceData } from "../lib/personalization";
+import { updatePreferencesOnSwipe }  from "../lib/personalization";
+import { buildPrefData }             from "../lib/prefHelpers";
 import { requireAuth }               from "../middleware/auth";
 import type { AuthRequest }          from "../middleware/auth";
 
@@ -36,49 +37,42 @@ router.patch("/seed", requireAuth, async (req: AuthRequest, res) => {
       SEED_STRENGTH_MAX
     );
 
-    const existing = await prisma.userPreference.findUnique({ where: { userId } });
-    if (existing?.seededAt)
-      return res.status(409).json({ error: "Preferences already seeded" });
+    // Serialized per user via an advisory lock, same as swipes: without it,
+    // two concurrent seed submissions (e.g. a double-tap on the CTA) could
+    // both pass the seededAt check below before either writes, seeding twice
+    // and silently dropping one computation.
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId})::bigint)`;
 
-    const current: UserPreferenceData = existing
-      ? {
-          likedCuisines:    existing.likedCuisines    as Record<string, number>,
-          dislikedCuisines: existing.dislikedCuisines as Record<string, number>,
-          priceCounts:      existing.priceCounts       as Record<string, number>,
-          totalLikes:       existing.totalLikes,
-          totalDislikes:    existing.totalDislikes,
-          morningLikes:     existing.morningLikes,
-          afternoonLikes:   existing.afternoonLikes,
-          eveningLikes:     existing.eveningLikes,
-          lateNightLikes:   existing.lateNightLikes,
+      const existing = await tx.userPreference.findUnique({ where: { userId } });
+      if (existing?.seededAt) return null;
+
+      // Simulate `strength` LIKE swipes per selected cuisine through the real
+      // preference function — ensures seeded priors match the same accumulation
+      // shape as real swipe history
+      let updated = buildPrefData(existing);
+      for (const cuisine of cuisines) {
+        for (let i = 0; i < strength; i++) {
+          updated = updatePreferencesOnSwipe(updated, cuisine, priceLevel, "LIKE");
         }
-      : {
-          likedCuisines: {}, dislikedCuisines: {}, priceCounts: {},
-          totalLikes: 0, totalDislikes: 0,
-          morningLikes: 0, afternoonLikes: 0, eveningLikes: 0, lateNightLikes: 0,
-        };
-
-    // Simulate `strength` LIKE swipes per selected cuisine through the real
-    // preference function — ensures seeded priors match the same accumulation
-    // shape as real swipe history
-    let updated = current;
-    for (const cuisine of cuisines) {
-      for (let i = 0; i < strength; i++) {
-        updated = updatePreferencesOnSwipe(updated, cuisine, priceLevel, "LIKE");
       }
-    }
 
-    await prisma.userPreference.upsert({
-      where:  { userId },
-      create: { userId, ...updated, seededAt: new Date() },
-      update: { ...updated, seededAt: new Date() },
+      await tx.userPreference.upsert({
+        where:  { userId },
+        create: { userId, ...updated, seededAt: new Date() },
+        update: { ...updated, seededAt: new Date() },
+      });
+
+      return updated;
     });
 
+    if (!result) return res.status(409).json({ error: "Preferences already seeded" });
+
     return res.json({
-      seededAt:        new Date().toISOString(),
-      likedCuisines:   updated.likedCuisines,
-      priceCounts:     updated.priceCounts,
-      totalLikes:      updated.totalLikes,
+      seededAt:      new Date().toISOString(),
+      likedCuisines: result.likedCuisines,
+      priceCounts:   result.priceCounts,
+      totalLikes:    result.totalLikes,
     });
   } catch (err) {
     console.error("PATCH /onboarding/seed error:", err);
