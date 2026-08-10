@@ -38,7 +38,7 @@ export default function TasteSetupFlow({ onComplete, onSkip }: TasteSetupFlowPro
   const toggleCuisine = (id: string) => {
     setSelectedCuisines((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
@@ -121,7 +121,7 @@ export default function TasteSetupFlow({ onComplete, onSkip }: TasteSetupFlowPro
             >
               <div className={styles.header}>
                 <h1 className={styles.title}>Your price range?</h1>
-                <p className={styles.sub}>We'll find spots that fit your budget</p>
+                <p className={styles.sub}>We&apos;ll find spots that fit your budget</p>
               </div>
 
               <div className={styles.priceList}>
