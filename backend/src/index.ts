@@ -1,26 +1,15 @@
 //STANDARD LIBRARY
 import "dotenv/config";
 
-//THIRD-PARTY LIBRARIES
-import express, { Request, Response, NextFunction } from "express";
-import cors from "cors";
-
 //LOCAL FILES
-import { authMiddleware } from "./middleware/auth";
 import { getMissingRequiredVars, isWeakSecretUnsafe } from "./lib/startupChecks";
-import authRouter            from "./routes/auth";
-import restaurantsRouter     from "./routes/restaurants";
-import swipesRouter          from "./routes/swipes";
-import matchesRouter         from "./routes/matches";
-import photosRouter          from "./routes/photos";
-import recommendationsRouter from "./routes/recommendations";
-import onboardingRouter      from "./routes/onboarding";
+import { app } from "./app";
 
 //CONSTANTS
-const app  = express();
 const PORT = process.env.PORT ?? 4000;
 
-// Fail fast if required env vars are missing or still set to placeholder values
+// Fail fast if required env vars are missing or still set to placeholder values.
+// Runs before app.listen() so a bad config never starts accepting connections.
 const missing = getMissingRequiredVars(process.env, ["DATABASE_URL", "JWT_SECRET"]);
 if (missing.length > 0) {
   console.error(`[startup] Missing required env var(s): ${missing.join(", ")}`);
@@ -30,37 +19,6 @@ if (isWeakSecretUnsafe(process.env.NODE_ENV, process.env.JWT_SECRET)) {
   console.error("[startup] JWT_SECRET is a placeholder — run: openssl rand -hex 32");
   process.exit(1);
 }
-
-//MIDDLEWARE
-app.use(cors({
-  origin: [process.env.FRONTEND_URL ?? "http://localhost:3000"],
-  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-}));
-app.use(express.json());
-app.use(authMiddleware);
-
-//ROUTES
-app.use("/auth",            authRouter);
-app.use("/restaurants",     restaurantsRouter);
-app.use("/swipes",          swipesRouter);
-app.use("/matches",         matchesRouter);
-app.use("/places",          photosRouter);
-app.use("/recommendations", recommendationsRouter);
-app.use("/onboarding",      onboardingRouter);
-
-/** GET /health — liveness probe for uptime monitors and load balancers */
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
-//GLOBAL ERROR HANDLER
-// Catches any unhandled errors thrown inside route handlers
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("Unhandled error:", err);
-  res.status(500).json({ error: "An unexpected error occurred" });
-});
 
 //SERVER
 app.listen(PORT, () => {
