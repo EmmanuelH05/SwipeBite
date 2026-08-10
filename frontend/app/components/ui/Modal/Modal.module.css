@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(29, 24, 20, 0.45);
   backdrop-filter: blur(4px);
   padding: 1rem;
 }
@@ -13,24 +13,24 @@
 .panel {
   width: 100%;
   max-width: 28rem;
-  border-radius: 1rem;
-  background: #161210;
-  border: 1px solid #2c2420;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border);
   padding: 1.5rem;
-  box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
   animation: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .title {
   font-size: 1.125rem;
-  font-weight: 600;
-  color: #f6f0e8;
+  font-weight: 700;
+  color: var(--color-text-primary);
 }
 
 .subtitle {
   margin-top: 0.25rem;
   font-size: 0.875rem;
-  color: #9a8a78;
+  color: var(--color-text-secondary);
 }
 
 .body {

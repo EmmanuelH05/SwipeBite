@@ -1,18 +1,32 @@
 @import "tailwindcss";
 
 @theme {
-  --color-surface-bg: #0a0806;
-  --color-surface-card: #161210;
-  --color-surface-elevated: #201a16;
-  --color-text-primary: #f6f0e8;
-  --color-text-secondary: #9a8a78;
-  --color-text-muted: #5c504a;
-  --color-border: #2c2420;
-  --color-border-subtle: #1c1612;
-  --color-accent: #f97316;
-  --color-accent-light: #fb923c;
-  --color-like: #22c55e;
-  --color-pass: #ef4444;
+  /* Citrine — warm paper ground, ink-navy text, coral accent, olive status */
+  --color-surface-bg: #fbf3ee;
+  --color-surface-card: #ffffff;
+  --color-surface-elevated: #f4e6dd;
+  --color-text-primary: #1d2230;
+  --color-text-secondary: #5b6070;
+  --color-text-muted: #6f6558;
+  --color-border: rgba(29, 34, 48, 0.12);
+  --color-border-subtle: rgba(29, 34, 48, 0.08);
+  --color-accent: #ff5a36;
+  --color-accent-light: #ff7a5c;
+  --color-accent-dark: #c23e1f;
+  --color-olive: #55603e;
+  --color-olive-dot: #6b7a4f;
+  --color-like: #16a34a;
+  --color-pass: #b91c1c;
+
+  /* 2-step radius scale: sharp corners read editorial, not templated */
+  --radius-sm: 4px;
+  --radius-lg: 10px;
+
+  /* Warm-tinted shadows -- a navy-tinted shadow on a peach ground is the
+     default AI-generated-page giveaway; every shadow here is tinted toward
+     the accent instead. */
+  --shadow-sm: 0 1px 2px rgba(120, 60, 35, 0.1), 0 4px 12px rgba(120, 60, 35, 0.06);
+  --shadow-lg: 0 2px 4px rgba(120, 60, 35, 0.12), 0 10px 24px rgba(120, 60, 35, 0.1);
 }
 
 * {
@@ -28,15 +42,15 @@ body {
 }
 
 body {
-  background: #080604;
-  color: #f6f0e8;
+  background: var(--color-surface-bg);
+  color: var(--color-text-primary);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 *:focus-visible {
-  outline: 2px solid #f97316;
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
@@ -46,8 +60,8 @@ a {
 }
 
 ::selection {
-  background: rgba(249, 115, 22, 0.25);
-  color: #f6f0e8;
+  background: rgba(255, 90, 54, 0.18);
+  color: var(--color-text-primary);
 }
 
 ::-webkit-scrollbar {
@@ -59,7 +73,7 @@ a {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2c2420;
+  background: var(--color-border);
   border-radius: 3px;
 }
 
@@ -125,8 +139,8 @@ a {
 }
 
 @keyframes pulse-warm {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
-  50% { box-shadow: 0 0 20px 4px rgba(249, 115, 22, 0.12); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 90, 54, 0); }
+  50% { box-shadow: 0 0 20px 4px rgba(255, 90, 54, 0.14); }
 }
 
 .animate-fade-in {
@@ -146,7 +160,7 @@ a {
 }
 
 .skeleton-pulse {
-  background: linear-gradient(90deg, #1c1612 25%, #2c2420 50%, #1c1612 75%);
+  background: linear-gradient(90deg, #f4e6dd 25%, #ede0d5 50%, #f4e6dd 75%);
   background-size: 200% 100%;
   animation: shimmer 1.8s ease-in-out infinite;
 }

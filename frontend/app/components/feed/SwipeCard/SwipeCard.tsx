@@ -96,51 +96,51 @@ const SwipeCard = forwardRef<HTMLDivElement, SwipeCardProps>(function SwipeCard(
         </div>
       )}
 
-      {/* Gradient + info */}
+      {/* Score badge — corner overlay on the photo, not a chip among chips */}
+      {score && score.total > 0 && (
+        <div className={`${styles.scoreBadge} ${scoreClass}`}>
+          <div className={styles.scoreNum}>{Math.round(score.total)}<small>%</small></div>
+          <div className={styles.scoreLabel}>Match</div>
+        </div>
+      )}
+
+      {/* Die-cut seam + info panel */}
       <div className={styles.gradient} />
+      <div className={styles.seam} />
       <div className={styles.info}>
-        <div>
-          <div className={styles.nameRow}>
-            <h2 className={styles.name}>{restaurant.name}</h2>
-            {restaurant.phone && (
-              <a
-                href={`tel:${restaurant.phone}`}
-                className={styles.callBtn}
-                onClick={(e) => e.stopPropagation()}
-                aria-label={`Call ${restaurant.name}`}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.1 1.18 2 2 0 012.11 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z" />
-                </svg>
-                Call
-              </a>
-            )}
-          </div>
-          <div className={styles.meta}>
-            <span className={styles.chip}>{formatCuisine(restaurant.cuisine ?? "Restaurant")}</span>
-            <span className={styles.chip}>{restaurant.priceLevel}</span>
-            {score && score.total > 0 && (
-              <span className={`${styles.scoreChip} ${scoreClass}`}>
-                <span className={styles.scoreDotInline} />
-                {Math.round(score.total)}% match
-              </span>
-            )}
-            {openStatus.label && (
-              <span className={`${styles.openChip} ${openStatus.open === true ? styles.openYes : openStatus.open === false ? styles.openNo : ""}`}>
-                {openStatus.label}
-              </span>
-            )}
-            {restaurant.address && (
-              <span className={styles.address}>{restaurant.address.split(",")[0]}</span>
-            )}
-          </div>
+        <div className={styles.nameRow}>
+          <h2 className={styles.name}>{restaurant.name}</h2>
+          {restaurant.phone && (
+            <a
+              href={`tel:${restaurant.phone}`}
+              className={styles.callBtn}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Call ${restaurant.name}`}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.1 1.18 2 2 0 012.11 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z" />
+              </svg>
+              Call
+            </a>
+          )}
+        </div>
+        <div className={styles.meta}>
+          <span className={styles.chip}>{formatCuisine(restaurant.cuisine ?? "Restaurant")}</span>
+          <span className={styles.priceText}>{restaurant.priceLevel}</span>
+          {openStatus.label && (
+            <span className={`${styles.openStatus} ${openStatus.open === true ? styles.openYes : openStatus.open === false ? styles.openNo : ""}`}>
+              <span className={styles.openDot} />
+              {openStatus.label}
+            </span>
+          )}
+          {restaurant.address && (
+            <span className={styles.address}>{restaurant.address.split(",")[0]}</span>
+          )}
         </div>
 
         {score?.explanation && (
           <div className={styles.explanation}>
-            <svg className={styles.explanationIcon} width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 2.5a1 1 0 110 2 1 1 0 010-2zM6.5 7h1.25v4.5h1.5V7H10v-.75H6.5V7z" />
-            </svg>
+            <span className={styles.explanationLabel}>Why this card</span>
             <p className={styles.explanationText}>{score.explanation}</p>
           </div>
         )}

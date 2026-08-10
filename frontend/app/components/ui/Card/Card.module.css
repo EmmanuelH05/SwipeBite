@@ -1,12 +1,12 @@
 .card {
   overflow: hidden;
-  border-radius: 1rem;
-  background: #161210;
-  border: 1px solid #2c2420;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border);
   transition: all 0.3s ease-out;
 }
 
 .card.glow:hover {
-  box-shadow: 0 0 30px rgba(249, 115, 22, 0.08);
-  border-color: #3c3228;
+  box-shadow: var(--shadow-sm);
+  border-color: rgba(255, 90, 54, 0.3);
 }
