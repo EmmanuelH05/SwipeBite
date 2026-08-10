@@ -3,6 +3,7 @@ import "dotenv/config";
 
 //LOCAL FILES
 import { getMissingRequiredVars, isWeakSecretUnsafe } from "./lib/startupChecks";
+import { prisma } from "./lib/prisma";
 import { app } from "./app";
 
 //CONSTANTS
@@ -21,6 +22,19 @@ if (isWeakSecretUnsafe(process.env.NODE_ENV, process.env.JWT_SECRET)) {
 }
 
 //SERVER
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`SwipeBite API running at http://localhost:${PORT}`);
 });
+
+//GRACEFUL SHUTDOWN
+// Stop accepting new connections, let in-flight requests finish, then close
+// the DB pool -- avoids leaking Prisma connections on every redeploy/restart.
+function shutdown(signal: string): void {
+  console.log(`[shutdown] ${signal} received, closing server...`);
+  server.close(() => {
+    prisma.$disconnect().finally(() => process.exit(0));
+  });
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
