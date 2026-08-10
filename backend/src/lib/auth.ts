@@ -93,3 +93,15 @@ export function generateRefreshToken(): string {
 export function refreshTokenExpiry(): Date {
   return new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS);
 }
+
+/**
+ * Hashes a refresh token for storage/lookup. SHA-256, not bcrypt: the input
+ * is already a 64-byte crypto.randomBytes value (128 hex chars), not a
+ * human-chosen low-entropy secret -- there's nothing for a slow KDF to
+ * protect against here, since brute-forcing the token itself is infeasible
+ * regardless of hash speed. A DB leak now exposes hashes an attacker can't
+ * turn back into usable tokens, instead of the usable tokens themselves.
+ */
+export function hashRefreshToken(raw: string): string {
+  return crypto.createHash("sha256").update(raw).digest("hex");
+}

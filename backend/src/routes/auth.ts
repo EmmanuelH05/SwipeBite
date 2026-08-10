@@ -11,17 +11,9 @@ import {
   createAccessToken,
   generateRefreshToken,
   refreshTokenExpiry,
+  hashRefreshToken,
 } from "../lib/auth";
 import type { AuthRequest } from "../middleware/auth";
-
-//TYPES
-type RefreshTokenRow = {
-  id: string;
-  token: string;
-  userId: string;
-  expiresAt: Date;
-  revokedAt: Date | null;
-};
 
 //CONSTANTS
 const router = Router();
@@ -37,38 +29,26 @@ function clientIp(req: AuthRequest): string {
   );
 }
 
-/** Persists a new refresh token in the DB and returns the raw token string. */
+/**
+ * Persists a new refresh token in the DB (hashed -- a DB leak shouldn't hand
+ * over usable sessions) and returns the raw token string for the client.
+ */
 async function issueRefreshToken(userId: string): Promise<string> {
-  const raw    = generateRefreshToken();
-  const expiry = refreshTokenExpiry();
-  const id     = `rt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-
-  await prisma.$executeRaw`
-    INSERT INTO "refresh_tokens" ("id", "token", "userId", "expiresAt")
-    VALUES (${id}, ${raw}, ${userId}, ${expiry})
-  `;
-
+  const raw = generateRefreshToken();
+  await prisma.refreshToken.create({
+    data: { token: hashRefreshToken(raw), userId, expiresAt: refreshTokenExpiry() },
+  });
   return raw;
 }
 
-/** Fetches a refresh token row by its raw string value. */
-async function findRefreshToken(token: string): Promise<RefreshTokenRow | null> {
-  const rows = await prisma.$queryRaw<RefreshTokenRow[]>`
-    SELECT "id", "token", "userId", "expiresAt", "revokedAt"
-    FROM "refresh_tokens"
-    WHERE "token" = ${token}
-    LIMIT 1
-  `;
-  return rows[0] ?? null;
+/** Looks up a refresh token row by the raw string the client presented. */
+async function findRefreshToken(rawToken: string) {
+  return prisma.refreshToken.findUnique({ where: { token: hashRefreshToken(rawToken) } });
 }
 
 /** Marks a refresh token as revoked. */
 async function revokeRefreshToken(id: string): Promise<void> {
-  await prisma.$executeRaw`
-    UPDATE "refresh_tokens"
-    SET "revokedAt" = NOW()
-    WHERE "id" = ${id}
-  `;
+  await prisma.refreshToken.update({ where: { id }, data: { revokedAt: new Date() } });
 }
 
 //ROUTES
@@ -189,11 +169,10 @@ router.post("/logout", async (req, res) => {
       return res.status(400).json({ error: "refreshToken is required" });
 
     // Idempotent: no error if token doesn't exist or is already revoked
-    await prisma.$executeRaw`
-      UPDATE "refresh_tokens"
-      SET "revokedAt" = NOW()
-      WHERE "token" = ${refreshToken} AND "revokedAt" IS NULL
-    `;
+    await prisma.refreshToken.updateMany({
+      where: { token: hashRefreshToken(refreshToken), revokedAt: null },
+      data:  { revokedAt: new Date() },
+    });
 
     return res.json({ success: true });
   } catch (err) {

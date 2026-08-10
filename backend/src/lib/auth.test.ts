@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import jwt from "jsonwebtoken";
-import { createAccessToken, verifyAccessToken, validatePasswordStrength } from "./auth";
+import { createAccessToken, verifyAccessToken, validatePasswordStrength, hashRefreshToken } from "./auth";
 
 describe("createAccessToken / verifyAccessToken", () => {
   test("round-trips a valid token", () => {
@@ -34,6 +34,27 @@ describe("createAccessToken / verifyAccessToken", () => {
       algorithm: "none",
     });
     expect(verifyAccessToken(unsigned)).toBeNull();
+  });
+});
+
+describe("hashRefreshToken", () => {
+  test("is deterministic -- the same raw token always hashes the same way", () => {
+    const raw = "a-raw-refresh-token-value";
+    expect(hashRefreshToken(raw)).toBe(hashRefreshToken(raw));
+  });
+
+  test("never returns the input unchanged", () => {
+    const raw = "a-raw-refresh-token-value";
+    expect(hashRefreshToken(raw)).not.toBe(raw);
+  });
+
+  test("produces a 64-char hex sha256 digest", () => {
+    const hash = hashRefreshToken("whatever");
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test("different tokens hash to different values", () => {
+    expect(hashRefreshToken("token-a")).not.toBe(hashRefreshToken("token-b"));
   });
 });
 
