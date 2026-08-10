@@ -35,7 +35,7 @@ if (process.env.NODE_ENV === "production" && WEAK_SECRETS.includes(process.env.J
 
 //MIDDLEWARE
 app.use(cors({
-  origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
+  origin: [process.env.FRONTEND_URL ?? "http://localhost:3000"],
   methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
