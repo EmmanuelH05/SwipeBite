@@ -25,6 +25,12 @@ export const REFRESH_TOKEN_EXPIRY_MS = 7  * 24 * 60 * 60 * 1000; // 7 days
 const ACCESS_TOKEN_EXPIRY_JWT  = "15m";
 const REFRESH_TOKEN_EXPIRY_JWT = "7d"; // used only as a belt-and-suspenders check
 
+// Only HS256 is ever used to sign tokens in this app. Pinning verify() to it
+// explicitly is defense-in-depth against algorithm-confusion attacks -- not
+// currently exploitable since no asymmetric keys exist anywhere here, but
+// free to close and cheap insurance against a future config change.
+const ALLOWED_JWT_ALGORITHMS: jwt.Algorithm[] = ["HS256"];
+
 //HELPERS
 
 /** Hashes a plain-text password using bcrypt. */
@@ -67,7 +73,7 @@ export function createAccessToken(userId: string): string {
  */
 export function verifyAccessToken(token: string): JWTPayload | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ALLOWED_JWT_ALGORITHMS }) as JWTPayload;
     if (payload.type !== "access") return null;
     return payload;
   } catch {
@@ -87,11 +93,3 @@ export function generateRefreshToken(): string {
 export function refreshTokenExpiry(): Date {
   return new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS);
 }
-
-// Keep the old createToken / verifyToken names as aliases so nothing breaks
-// while the rest of the codebase migrates to the new names.
-/** @deprecated Use createAccessToken instead */
-export const createToken = createAccessToken;
-
-/** @deprecated Use verifyAccessToken instead */
-export const verifyToken = verifyAccessToken;
