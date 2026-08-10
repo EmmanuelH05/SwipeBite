@@ -1,6 +1,5 @@
 //THIRD-PARTY LIBRARIES
 import { Router } from "express";
-import { Prisma } from "@prisma/client";
 
 //LOCAL FILES
 import { prisma } from "../lib/prisma";
@@ -15,9 +14,6 @@ import {
 import type { AuthRequest } from "../middleware/auth";
 
 //TYPES
-// Refresh token rows queried via $queryRaw (Prisma client may not have this model
-// in the generated types yet — run `prisma generate` after the migration to restore
-// full type safety here).
 type RefreshTokenRow = {
   id: string;
   token: string;
