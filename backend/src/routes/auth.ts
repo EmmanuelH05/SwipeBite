@@ -1,9 +1,9 @@
 //THIRD-PARTY LIBRARIES
 import { Router } from "express";
-import { Prisma } from "@prisma/client";
 
 //LOCAL FILES
 import { prisma } from "../lib/prisma";
+import { authLimiter, refreshLimiter } from "../lib/rateLimit";
 import {
   hashPassword,
   verifyPassword,
@@ -11,34 +11,12 @@ import {
   createAccessToken,
   generateRefreshToken,
   refreshTokenExpiry,
+  hashRefreshToken,
 } from "../lib/auth";
 import type { AuthRequest } from "../middleware/auth";
 
-//TYPES
-// Refresh token rows queried via $queryRaw (Prisma client may not have this model
-// in the generated types yet — run `prisma generate` after the migration to restore
-// full type safety here).
-type RefreshTokenRow = {
-  id: string;
-  token: string;
-  userId: string;
-  expiresAt: Date;
-  revokedAt: Date | null;
-};
-
 //CONSTANTS
 const router = Router();
-
-// Brute-force protection: max 10 attempts per IP per 15 minutes on sensitive routes
-const AUTH_LIMIT     = 10;
-const AUTH_WINDOW_MS = 15 * 60 * 1000;
-const authAttempts   = new Map<string, { count: number; resetAt: number }>();
-
-// Tighter limit for /refresh — legitimate clients call it at most once per access-token
-// lifetime (15 min), so 20 requests per 15-min window per IP is generous while still
-// blocking automated token-cycling attacks.
-const REFRESH_LIMIT     = 20;
-const refreshAttempts   = new Map<string, { count: number; resetAt: number }>();
 
 //HELPERS
 
@@ -51,72 +29,26 @@ function clientIp(req: AuthRequest): string {
   );
 }
 
-/** Returns true when the IP is within its attempt quota. */
-function checkAuthLimit(ip: string): boolean {
-  const entry = authAttempts.get(ip);
-  if (!entry || Date.now() > entry.resetAt) return true;
-  return entry.count < AUTH_LIMIT;
-}
-
-/** Increments the auth attempt counter for an IP. */
-function recordAuthAttempt(ip: string): void {
-  const entry = authAttempts.get(ip);
-  if (!entry || Date.now() > entry.resetAt) {
-    authAttempts.set(ip, { count: 1, resetAt: Date.now() + AUTH_WINDOW_MS });
-  } else {
-    entry.count++;
-  }
-}
-
-/** Returns true when the IP is within the refresh-endpoint quota. */
-function checkRefreshLimit(ip: string): boolean {
-  const entry = refreshAttempts.get(ip);
-  if (!entry || Date.now() > entry.resetAt) return true;
-  return entry.count < REFRESH_LIMIT;
-}
-
-/** Increments the refresh attempt counter for an IP. */
-function recordRefreshAttempt(ip: string): void {
-  const entry = refreshAttempts.get(ip);
-  if (!entry || Date.now() > entry.resetAt) {
-    refreshAttempts.set(ip, { count: 1, resetAt: Date.now() + AUTH_WINDOW_MS });
-  } else {
-    entry.count++;
-  }
-}
-
-/** Persists a new refresh token in the DB and returns the raw token string. */
+/**
+ * Persists a new refresh token in the DB (hashed -- a DB leak shouldn't hand
+ * over usable sessions) and returns the raw token string for the client.
+ */
 async function issueRefreshToken(userId: string): Promise<string> {
-  const raw    = generateRefreshToken();
-  const expiry = refreshTokenExpiry();
-  const id     = `rt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-
-  await prisma.$executeRaw`
-    INSERT INTO "refresh_tokens" ("id", "token", "userId", "expiresAt")
-    VALUES (${id}, ${raw}, ${userId}, ${expiry})
-  `;
-
+  const raw = generateRefreshToken();
+  await prisma.refreshToken.create({
+    data: { token: hashRefreshToken(raw), userId, expiresAt: refreshTokenExpiry() },
+  });
   return raw;
 }
 
-/** Fetches a refresh token row by its raw string value. */
-async function findRefreshToken(token: string): Promise<RefreshTokenRow | null> {
-  const rows = await prisma.$queryRaw<RefreshTokenRow[]>`
-    SELECT "id", "token", "userId", "expiresAt", "revokedAt"
-    FROM "refresh_tokens"
-    WHERE "token" = ${token}
-    LIMIT 1
-  `;
-  return rows[0] ?? null;
+/** Looks up a refresh token row by the raw string the client presented. */
+async function findRefreshToken(rawToken: string) {
+  return prisma.refreshToken.findUnique({ where: { token: hashRefreshToken(rawToken) } });
 }
 
 /** Marks a refresh token as revoked. */
 async function revokeRefreshToken(id: string): Promise<void> {
-  await prisma.$executeRaw`
-    UPDATE "refresh_tokens"
-    SET "revokedAt" = NOW()
-    WHERE "id" = ${id}
-  `;
+  await prisma.refreshToken.update({ where: { id }, data: { revokedAt: new Date() } });
 }
 
 //ROUTES
@@ -125,7 +57,7 @@ async function revokeRefreshToken(id: string): Promise<void> {
 router.post("/register", async (req: AuthRequest, res) => {
   try {
     const ip = clientIp(req);
-    if (!checkAuthLimit(ip))
+    if (!authLimiter.consume(ip))
       return res.status(429).json({ error: "Too many requests. Please wait a few minutes." });
 
     const { email, password, name } = req.body;
@@ -141,7 +73,6 @@ router.post("/register", async (req: AuthRequest, res) => {
     if (strengthError) return res.status(400).json({ error: strengthError });
 
     const existing = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
-    recordAuthAttempt(ip);
     if (existing) return res.status(409).json({ error: "Email already registered" });
 
     const passwordHash = await hashPassword(password);
@@ -164,9 +95,8 @@ router.post("/register", async (req: AuthRequest, res) => {
 router.post("/login", async (req: AuthRequest, res) => {
   try {
     const ip = clientIp(req);
-    if (!checkAuthLimit(ip))
+    if (!authLimiter.consume(ip))
       return res.status(429).json({ error: "Too many requests. Please wait a few minutes." });
-    recordAuthAttempt(ip);
 
     const { email, password } = req.body;
     if (!email || typeof email !== "string" || !email.trim())
@@ -203,9 +133,8 @@ router.post("/login", async (req: AuthRequest, res) => {
 router.post("/refresh", async (req: AuthRequest, res) => {
   try {
     const ip = clientIp(req);
-    if (!checkRefreshLimit(ip))
+    if (!refreshLimiter.consume(ip))
       return res.status(429).json({ error: "Too many requests. Please wait a few minutes." });
-    recordRefreshAttempt(ip);
 
     const { refreshToken } = req.body;
     if (!refreshToken || typeof refreshToken !== "string")
@@ -240,11 +169,10 @@ router.post("/logout", async (req, res) => {
       return res.status(400).json({ error: "refreshToken is required" });
 
     // Idempotent: no error if token doesn't exist or is already revoked
-    await prisma.$executeRaw`
-      UPDATE "refresh_tokens"
-      SET "revokedAt" = NOW()
-      WHERE "token" = ${refreshToken} AND "revokedAt" IS NULL
-    `;
+    await prisma.refreshToken.updateMany({
+      where: { token: hashRefreshToken(refreshToken), revokedAt: null },
+      data:  { revokedAt: new Date() },
+    });
 
     return res.json({ success: true });
   } catch (err) {
