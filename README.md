@@ -24,6 +24,7 @@ The stack is a Next.js 16 frontend talking to an Express 5 REST API backed by Po
 - Prisma ORM with PostgreSQL (Supabase-compatible)
 - `bcryptjs` for password hashing, `jsonwebtoken` for token signing
 - `nodemon` + `tsx` for development hot reload
+- `bun test` for the test suite (ML scoring math, auth, rate limiting)
 
 **Infrastructure**
 - Docker Compose for full-stack local/production deployment
@@ -37,12 +38,13 @@ The stack is a Next.js 16 frontend talking to an Express 5 REST API backed by Po
 - **Real-time preference updates** -- every swipe immediately updates the user's cuisine, price, and time-of-day preference vectors before the next card loads
 - **Hybrid ML recommendations** -- ranked feed combining cuisine cluster matching, price affinity, time-of-day signals, collaborative filtering, and Thompson Sampling exploration (see [How Personalization Works](#how-personalization-works))
 - **Score explanation** -- each swipe card shows a breakdown of why that restaurant was recommended
-- **Auth** -- JWT access tokens (15 min) with rotating refresh tokens (7 days); secure logout revokes the token in the database
+- **Auth** -- JWT access tokens (15 min) with rotating refresh tokens (7 days), stored hashed (SHA-256) in the database; secure logout revokes the token
 - **Restaurant catalog** -- load restaurants for any location via Google Places; catalog is additive (multiple users loading the same city merge results, never overwrite)
 - **Matches list** -- all LIKED restaurants with visit tracking; mark a restaurant visited and rate the experience
 - **Onboarding flow** -- `TasteSetupFlow` seeds an initial preference profile so new users get relevant recommendations before reaching the 5-swipe collaborative filtering threshold
-- **Photo proxy** -- `/places/photo` route fetches Google Places photos server-side, keeping the API key out of the browser
+- **Photo proxy** -- `/places/photo` route fetches Google Places photos server-side, keeping the API key out of the browser; rate-limited per IP
 - **Debug endpoint** -- `GET /recommendations/debug` returns the full ML score breakdown per restaurant for development and tuning
+- **Demo mode** -- a `?at=<accessToken>&rt=<refreshToken>` link logs a visitor straight in with a pre-issued token pair, then strips the params from the URL. For sharing a live, populated account without handing out real credentials -- it only accepts already-valid tokens, so it can't grant access a stolen/guessed token pair couldn't already get
 
 ---
 
@@ -54,6 +56,7 @@ The scoring pipeline lives in `backend/src/lib/`:
 ml-recommender.ts   pure scoring math: cuisine clustering, decay, CF, Thompson Sampling
 personalization.ts  bridge between DB types and the scorer; calls updatePreferencesOnSwipe
 prefHelpers.ts      DB queries, CF vector cache (5-min TTL), MLContext assembly
+preferenceStore.ts  atomic read-modify-write for preference counters (Postgres advisory lock)
 ```
 
 **Cuisine clustering** -- raw Google Places types (`"pizza_restaurant"`, `"italian_restaurant"`) are normalized into 11 clusters (asian, italian, american, mexican, indian, mediterranean, seafood, european, cafe, dessert, fastfood) so related cuisines share a preference signal instead of being treated as unrelated strings.
@@ -160,7 +163,7 @@ docker build --build-arg NEXT_PUBLIC_API_URL=https://api.your-domain.com -t swip
 | `GOOGLE_API_KEY` | Yes | Google Places API (New) key for `/restaurants/load` and photo proxy |
 | `FRONTEND_URL` | No | CORS allowed origin; defaults to `http://localhost:3000` |
 | `PORT` | No | Port the API listens on; defaults to `4000` |
-| `NODE_ENV` | No | Set to `production` in deployed environments; triggers weak-secret check on startup |
+| `NODE_ENV` | No | Set to `production` in deployed environments. The weak-secret startup check is fail-closed: it triggers whenever `NODE_ENV` is anything other than `development`, not only when it's exactly `production` |
 
 ### `frontend/.env.local` (not committed)
 
@@ -198,14 +201,17 @@ SwipeBite/
       schema.prisma       data models: User, UserPreference, Restaurant, Swipe, RefreshToken
       migrations/         SQL migration history
     src/
-      index.ts            Express app entry point, middleware setup, route registration
+      index.ts            env validation, graceful shutdown, then app.listen()
+      app.ts              configured Express app (no listener) -- importable by tests
       lib/
         ml-recommender.ts cuisine clustering, scoring math, Thompson Sampling, CF
         personalization.ts updatePreferencesOnSwipe; bridges DB types to scorer
+        preferenceStore.ts atomic (advisory-lock) read-modify-write for preference counters
         prefHelpers.ts    DB queries, CF vector cache, MLContext assembly
-        auth.ts           JWT signing/verification helpers
+        auth.ts           JWT signing/verification, refresh-token hashing
         prisma.ts         Prisma client singleton
-        rateLimit.ts      in-memory rate limiter (single-instance)
+        rateLimit.ts      in-memory rate limiter factory (single-instance)
+        startupChecks.ts  env-var validation, fail-closed weak-secret check
       routes/
         auth.ts           /auth/* endpoints
         restaurants.ts    /restaurants/* endpoints
@@ -216,10 +222,16 @@ SwipeBite/
         onboarding.ts     onboarding endpoints
       middleware/
         auth.ts           JWT authentication middleware
+      *.test.ts           bun test -- ml-recommender, auth, rateLimit, startupChecks, photos
   frontend/
     app/
-      page.tsx            root page (swipe feed, ~580 lines -- refactor deferred)
+      page.tsx            root page: composes the hooks below + JSX (~185 lines)
       layout.tsx          root layout
+      hooks/
+        useAuth.ts         session state, sign-up/login/logout, demo mode, onboarding
+        useRestaurantFeed.ts feed/matches data, location-load form, swipe recording
+        useSwipeGesture.ts touch/mouse drag state for the swipe card
+        useVisitModal.ts   "mark as visited" modal state + save flow
       lib/
         types.ts          shared TypeScript interfaces
         utils.ts          shared utilities
@@ -231,10 +243,10 @@ SwipeBite/
         auth/             auth forms and flows
         onboarding/       onboarding screens
         modal/            modal components
-        restaurant/       restaurant detail components
+        restaurant/       PhotoStrip
         ui/               shared UI primitives
         layout/           layout components
-  docs/                   internal planning docs (algorithm plan, phase commands, styling guide)
+  docs/                   local planning notes (gitignored -- not part of the shared repo)
   docker-compose.yml      full-stack container orchestration
   CLAUDE.md               developer reference (architecture, invariants, ML weights)
 ```
@@ -253,8 +265,9 @@ SwipeBite/
 
 ## Known Limitations
 
-- **No tests** -- the ML scoring functions in `ml-recommender.ts` are pure and the highest-value place to start
-- **CF cache is in-process** -- multi-instance deployments need Redis for the 5-minute collaborative filtering cache
+- **In-memory rate limiting and CF cache are single-instance** -- multi-instance deployments need Redis for both
 - **Tokens stored in `localStorage`** -- XSS-accessible; HttpOnly cookies would be more secure
 - **No pagination** on `GET /restaurants` -- relevant once a user's unswiped catalog grows large
 - **`yelpId` column stores Google Place IDs** -- naming mismatch from original scaffolding; renaming requires a migration
+- **No swipe undo/rewind** -- a mis-swipe is final; would need a new backend endpoint
+- **No cold-start qualifier on the match score** -- a new user with 0-4 swipes still sees a numeric score, not a "still learning your taste" indicator
