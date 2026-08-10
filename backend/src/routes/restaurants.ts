@@ -138,9 +138,8 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
       PRICE_LEVEL_EXPENSIVE:   "$$$",
     };
 
-    let created = 0;
-    for (const p of allPlaces) {
-      const placeId    = p.id ?? p.name ?? `g_${Date.now()}_${created}`;
+    const upsertArgs = allPlaces.map((p, i) => {
+      const placeId    = p.id ?? p.name ?? `g_${Date.now()}_${i}`;
       const name       = p.displayName?.text ?? "Restaurant";
       const cuisine    = p.types?.find((t) => t !== "restaurant" && t !== "food" && t !== "point_of_interest") ?? "Restaurant";
       const priceLevel = priceMap[p.priceLevel ?? ""] ?? "$$";
@@ -149,12 +148,22 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
       const photoNames = (p.photos ?? []).map((ph) => ph.name).filter((n): n is string => !!n).slice(0, 6);
       const openingHours = p.regularOpeningHours?.weekdayDescriptions?.join("\n") ?? null;
 
-      await prisma.restaurant.upsert({
+      return {
         where:  { yelpId: placeId },
         create: { yelpId: placeId, name, cuisine, priceLevel, address, phone, photoNames, openingHours },
         update: { name, cuisine, priceLevel, address, phone, photoNames, openingHours },
-      });
-      created++;
+      };
+    });
+
+    // Batched with bounded concurrency instead of either fully sequential
+    // (slow -- up to ~200 awaited round trips, one at a time) or fully
+    // parallel (risks exhausting the Prisma connection pool on a large load).
+    const UPSERT_BATCH_SIZE = 20;
+    let created = 0;
+    for (let i = 0; i < upsertArgs.length; i += UPSERT_BATCH_SIZE) {
+      const batch = upsertArgs.slice(i, i + UPSERT_BATCH_SIZE);
+      await Promise.all(batch.map((args) => prisma.restaurant.upsert(args)));
+      created += batch.length;
     }
 
     return res.json({ loaded: created, location: location.trim() });
