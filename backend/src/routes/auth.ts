@@ -3,6 +3,7 @@ import { Router } from "express";
 
 //LOCAL FILES
 import { prisma } from "../lib/prisma";
+import { authLimiter, refreshLimiter } from "../lib/rateLimit";
 import {
   hashPassword,
   verifyPassword,
@@ -25,17 +26,6 @@ type RefreshTokenRow = {
 //CONSTANTS
 const router = Router();
 
-// Brute-force protection: max 10 attempts per IP per 15 minutes on sensitive routes
-const AUTH_LIMIT     = 10;
-const AUTH_WINDOW_MS = 15 * 60 * 1000;
-const authAttempts   = new Map<string, { count: number; resetAt: number }>();
-
-// Tighter limit for /refresh — legitimate clients call it at most once per access-token
-// lifetime (15 min), so 20 requests per 15-min window per IP is generous while still
-// blocking automated token-cycling attacks.
-const REFRESH_LIMIT     = 20;
-const refreshAttempts   = new Map<string, { count: number; resetAt: number }>();
-
 //HELPERS
 
 /** Returns client IP, respecting reverse-proxy forwarding headers. */
@@ -45,40 +35,6 @@ function clientIp(req: AuthRequest): string {
     req.socket.remoteAddress ??
     "unknown"
   );
-}
-
-/** Returns true when the IP is within its attempt quota. */
-function checkAuthLimit(ip: string): boolean {
-  const entry = authAttempts.get(ip);
-  if (!entry || Date.now() > entry.resetAt) return true;
-  return entry.count < AUTH_LIMIT;
-}
-
-/** Increments the auth attempt counter for an IP. */
-function recordAuthAttempt(ip: string): void {
-  const entry = authAttempts.get(ip);
-  if (!entry || Date.now() > entry.resetAt) {
-    authAttempts.set(ip, { count: 1, resetAt: Date.now() + AUTH_WINDOW_MS });
-  } else {
-    entry.count++;
-  }
-}
-
-/** Returns true when the IP is within the refresh-endpoint quota. */
-function checkRefreshLimit(ip: string): boolean {
-  const entry = refreshAttempts.get(ip);
-  if (!entry || Date.now() > entry.resetAt) return true;
-  return entry.count < REFRESH_LIMIT;
-}
-
-/** Increments the refresh attempt counter for an IP. */
-function recordRefreshAttempt(ip: string): void {
-  const entry = refreshAttempts.get(ip);
-  if (!entry || Date.now() > entry.resetAt) {
-    refreshAttempts.set(ip, { count: 1, resetAt: Date.now() + AUTH_WINDOW_MS });
-  } else {
-    entry.count++;
-  }
 }
 
 /** Persists a new refresh token in the DB and returns the raw token string. */
@@ -121,7 +77,7 @@ async function revokeRefreshToken(id: string): Promise<void> {
 router.post("/register", async (req: AuthRequest, res) => {
   try {
     const ip = clientIp(req);
-    if (!checkAuthLimit(ip))
+    if (!authLimiter.consume(ip))
       return res.status(429).json({ error: "Too many requests. Please wait a few minutes." });
 
     const { email, password, name } = req.body;
@@ -137,7 +93,6 @@ router.post("/register", async (req: AuthRequest, res) => {
     if (strengthError) return res.status(400).json({ error: strengthError });
 
     const existing = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
-    recordAuthAttempt(ip);
     if (existing) return res.status(409).json({ error: "Email already registered" });
 
     const passwordHash = await hashPassword(password);
@@ -160,9 +115,8 @@ router.post("/register", async (req: AuthRequest, res) => {
 router.post("/login", async (req: AuthRequest, res) => {
   try {
     const ip = clientIp(req);
-    if (!checkAuthLimit(ip))
+    if (!authLimiter.consume(ip))
       return res.status(429).json({ error: "Too many requests. Please wait a few minutes." });
-    recordAuthAttempt(ip);
 
     const { email, password } = req.body;
     if (!email || typeof email !== "string" || !email.trim())
@@ -199,9 +153,8 @@ router.post("/login", async (req: AuthRequest, res) => {
 router.post("/refresh", async (req: AuthRequest, res) => {
   try {
     const ip = clientIp(req);
-    if (!checkRefreshLimit(ip))
+    if (!refreshLimiter.consume(ip))
       return res.status(429).json({ error: "Too many requests. Please wait a few minutes." });
-    recordRefreshAttempt(ip);
 
     const { refreshToken } = req.body;
     if (!refreshToken || typeof refreshToken !== "string")

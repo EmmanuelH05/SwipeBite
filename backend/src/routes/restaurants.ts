@@ -3,7 +3,7 @@ import { Router } from "express";
 
 //LOCAL FILES
 import { prisma } from "../lib/prisma";
-import { checkRateLimit, recordRequest } from "../lib/rateLimit";
+import { restaurantLoadLimiter } from "../lib/rateLimit";
 import { buildPrefData, fetchMLData, buildMLContext } from "../lib/prefHelpers";
 import { scoreRestaurant } from "../lib/personalization";
 import { requireAuth } from "../middleware/auth";
@@ -70,7 +70,7 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
       req.socket.remoteAddress ??
       "unknown";
 
-    if (!checkRateLimit(ip))
+    if (!restaurantLoadLimiter.consume(ip))
       return res.status(429).json({ error: "Rate limit: max 10 loads per hour. Try again later." });
 
     const { location } = req.body;
@@ -157,7 +157,6 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
       created++;
     }
 
-    recordRequest(ip);
     return res.json({ loaded: created, location: location.trim() });
   } catch (err) {
     console.error("POST /restaurants/load error:", err);
