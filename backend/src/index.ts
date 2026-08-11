@@ -33,9 +33,23 @@ const server = app.listen(PORT, () => {
 //GRACEFUL SHUTDOWN
 // Stop accepting new connections, let in-flight requests finish, then close
 // the DB pool -- avoids leaking Prisma connections on every redeploy/restart.
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+
 function shutdown(signal: string): void {
   console.log(`[shutdown] ${signal} received, closing server...`);
+
+  // server.close()'s callback only fires once every connection is done --
+  // a single lingering keep-alive connection (or a client that never closes
+  // its socket) would otherwise let this hang forever and never actually
+  // exit on redeploy. Force it after a bounded grace period.
+  const forceExit = setTimeout(() => {
+    console.error(`[shutdown] Timed out after ${SHUTDOWN_TIMEOUT_MS}ms waiting for connections to close, forcing exit.`);
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
+  forceExit.unref();
+
   server.close(() => {
+    clearTimeout(forceExit);
     prisma.$disconnect().finally(() => process.exit(0));
   });
 }
