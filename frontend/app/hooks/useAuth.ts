@@ -119,12 +119,37 @@ export function useAuth({ setLoading, setError }: UseAuthParams) {
         body: JSON.stringify({ cuisines, priceLevel }),
       });
     } catch { /* non-critical */ }
-    await apiFetch(`${API_URL}/auth/me/onboarding`, { method: "PATCH" });
-    setUser((u) => u ? { ...u, hasCompletedOnboarding: true } : u);
+
+    // This one is never allowed to throw out of handleOnboardingComplete:
+    // TasteSetupFlow awaits onComplete() and only clears its "Saving..."
+    // state afterward, so an unhandled rejection here used to leave that UI
+    // stuck forever. It also only flips hasCompletedOnboarding locally once
+    // the PATCH actually succeeds, instead of claiming completion regardless
+    // of whether it persisted.
+    try {
+      const res = await apiFetch(`${API_URL}/auth/me/onboarding`, { method: "PATCH" });
+      if (!res.ok) {
+        setError("Couldn't save your preferences. Please try again.");
+        return;
+      }
+      setUser((u) => u ? { ...u, hasCompletedOnboarding: true } : u);
+    } catch {
+      setError("Couldn't save your preferences. Is the backend running?");
+    }
   };
 
   const handleOnboardingSkip = () => {
+    // Skip is optimistic -- the overlay dismisses immediately rather than
+    // waiting on a network round trip -- but still persists in the
+    // background so the skip sticks across reloads instead of silently
+    // reverting to only-local state (which used to re-show onboarding on
+    // every subsequent login).
     setUser((u) => u ? { ...u, hasCompletedOnboarding: true } : u);
+    apiFetch(`${API_URL}/auth/me/onboarding`, { method: "PATCH" })
+      .then((res) => {
+        if (!res.ok) setError("Couldn't save that you skipped onboarding -- you may see it again next time.");
+      })
+      .catch(() => setError("Couldn't save that you skipped onboarding -- you may see it again next time."));
   };
 
   const logout = () => {
