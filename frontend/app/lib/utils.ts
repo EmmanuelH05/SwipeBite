@@ -37,6 +37,41 @@ export function getAuthHeaders(): HeadersInit {
 
 // ─── Auto-refreshing fetch wrapper ───────────────────────────────────────────
 
+// Shared across all concurrent apiFetch() callers so that a burst of 401s
+// (e.g. several feed requests firing around the same expiry) triggers exactly
+// one POST /auth/refresh. Refresh tokens rotate on use (backend invariant),
+// so a second, independent refresh call would be rejected by the server and
+// clear the valid token pair the first call just stored, logging the user
+// out mid-session. Every concurrent caller instead awaits this single
+// in-flight refresh and shares its result.
+let refreshPromise: Promise<boolean> | null = null;
+
+function refreshTokens(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) return false;
+
+      const refreshRes = await fetch(`${API_URL}/auth/refresh`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ refreshToken }),
+      });
+      if (!refreshRes.ok) return false;
+
+      const { accessToken, refreshToken: newRefreshToken } = await refreshRes.json() as {
+        accessToken: string;
+        refreshToken: string;
+      };
+      setTokens(accessToken, newRefreshToken);
+      return true;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
 /**
  * Drop-in replacement for fetch() that transparently handles access token expiry.
  *
@@ -58,28 +93,16 @@ export async function apiFetch(
   if (res.status !== 401) return res;
 
   // 401 — try to silently refresh the access token
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) {
+  if (!getRefreshToken()) {
     clearTokens();
     return res; // caller handles 401
   }
 
-  const refreshRes = await fetch(`${API_URL}/auth/refresh`, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ refreshToken }),
-  });
-
-  if (!refreshRes.ok) {
+  const refreshed = await refreshTokens();
+  if (!refreshed) {
     clearTokens(); // refresh token invalid or expired — force re-login
     return res;
   }
-
-  const { accessToken, refreshToken: newRefreshToken } = await refreshRes.json() as {
-    accessToken: string;
-    refreshToken: string;
-  };
-  setTokens(accessToken, newRefreshToken);
 
   // Retry the original request with the new access token
   return fetch(input, {
