@@ -8,6 +8,7 @@ import {
   computeCFScore,
   computeThompsonExploration,
   computeClusterCuisineScore,
+  priceMlScore,
   hybridScore,
   type SwipeRecord,
   type AllSwipeRecord,
@@ -249,6 +250,32 @@ describe("computeClusterCuisineScore", () => {
   test("score falls below 0.5 when dislikes dominate", () => {
     const { score } = computeClusterCuisineScore("italian", {}, { italian: 10 });
     expect(score).toBeLessThan(0.5);
+  });
+});
+
+describe("priceMlScore", () => {
+  test("is monotonically non-decreasing in ratio across the full [0, 1] range", () => {
+    // Regression test: the old three-branch formula crossed over at its
+    // 0.2/0.4 boundaries (e.g. ratio 0.40 scored 0.900 but ratio 0.41 scored
+    // 0.823), so liking a price band *more* could score it *lower*.
+    let prevScore = -Infinity;
+    for (let pct = 0; pct <= 100; pct++) {
+      const ratio = pct / 100;
+      const { score } = priceMlScore("$$", { "$$": ratio, other: 1 - ratio });
+      expect(score).toBeGreaterThanOrEqual(prevScore);
+      prevScore = score;
+    }
+  });
+
+  test("returns neutral 0.5 with no reason when there's no price data yet", () => {
+    const { score, reason } = priceMlScore("$$", {});
+    expect(score).toBe(0.5);
+    expect(reason).toBeNull();
+  });
+
+  test("surfaces a budget-fit reason once ratio clears 0.4", () => {
+    const { reason } = priceMlScore("$$", { "$$": 5, other: 1 });
+    expect(reason).toContain("$$ fits your budget");
   });
 });
 

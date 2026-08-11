@@ -436,7 +436,7 @@ export type MLScoreBreakdown = {
   signals: string[];
 };
 
-function priceMlScore(
+export function priceMlScore(
   priceLevel: string,
   priceCounts: Record<string, number>
 ): { score: number; reason: string | null } {
@@ -444,9 +444,13 @@ function priceMlScore(
   if (total === 0) return { score: 0.5, reason: null };
 
   const ratio = (priceCounts[priceLevel] ?? 0) / total;
-  if (ratio > 0.4) return { score: 0.7 + ratio * 0.3, reason: `${priceLevel} fits your budget` };
-  if (ratio > 0.2) return { score: 0.5 + ratio, reason: null };
-  return { score: 0.3, reason: null };
+  // Single continuous, monotonic curve: 0.3 floor at no affinity for this
+  // price band up to 1.0 at full affinity. (Previously three piecewise
+  // branches that weren't monotonic — e.g. ratio 0.40 scored 0.900 but
+  // ratio 0.41 scored 0.823 — so liking a price band *more* could score it
+  // *lower*.)
+  const score = 0.3 + ratio * 0.7;
+  return { score, reason: ratio > 0.4 ? `${priceLevel} fits your budget` : null };
 }
 
 function timeMlScore(
