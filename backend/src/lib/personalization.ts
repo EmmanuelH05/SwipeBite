@@ -66,11 +66,24 @@ export type MLContext = {
   cfScore: number | null;
 };
 
-/** Adds `extra`'s counts onto `base`'s, summing values for shared keys. */
+// Fills in `extra`'s entries only for keys `base` doesn't already have --
+// deliberately NOT a sum. `base` (the decayed swipe profile) and `extra`
+// (the raw DB counters) both derive from the same real swipe history once
+// swipes exist: prefs.priceCounts always shares the "$"/"$$"/"$$$" key space
+// with priceCounts, and prefs.likedCuisines/dislikedCuisines collide with
+// likedClusters/dislikedClusters for any cuisine whose normalizeCuisine()
+// fallback returns it unchanged (e.g. "cafe", "bar" -- ordinary Google Places
+// types with no CUISINE_CLUSTERS entry). Summing those would double-count
+// every such real swipe on top of its own decayed weight, defeating decay
+// entirely for price and silently inflating those cuisines' confidence.
+// Filling only missing keys means a seeded/DB-only prior keeps influencing
+// clusters the user hasn't explored via real swipes yet (the cold-start case
+// this merge exists for), while any key real swipe evidence already covers
+// is left to that evidence alone.
 function mergeCounts(base: Record<string, number>, extra: Record<string, number>): Record<string, number> {
   const merged = { ...base };
   for (const [key, value] of Object.entries(extra)) {
-    merged[key] = (merged[key] ?? 0) + value;
+    if (!(key in merged)) merged[key] = value;
   }
   return merged;
 }
@@ -82,11 +95,14 @@ function mergeCounts(base: Record<string, number>, extra: Record<string, number>
 // It coordinates between the legacy preference data and the ML engine.
 //
 // If we have the user's raw swipe history (via mlCtx), we build a proper
-// decay-weighted profile and merge the DB counters into it as a standing
-// prior — onboarding's seeded cuisine picks live in those same counters
-// (PATCH /onboarding/seed calls updatePreferencesOnSwipe), and without this
-// merge they'd vanish from ranking the instant the user's first real swipe
-// gives mlCtx a non-empty history, discarding a deliberate cold-start signal.
+// decay-weighted profile and fill in any cluster/price level it has no data
+// for yet from the DB counters — onboarding's seeded cuisine picks live in
+// those same counters (PATCH /onboarding/seed calls updatePreferencesOnSwipe),
+// and without this they'd vanish from ranking the instant the user's first
+// real swipe gives mlCtx a non-empty history, discarding a deliberate
+// cold-start signal. See mergeCounts for why this fills gaps instead of
+// summing: the DB counters and the decayed profile share the same underlying
+// swipe history once swipes exist, so summing would double-count them.
 // If we have no swipe history at all — like during tests or if something goes
 // wrong — we fall back to the plain counters alone.
 // ─────────────────────────────────────────────────────────────────────────────

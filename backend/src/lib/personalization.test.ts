@@ -91,4 +91,28 @@ describe("scoreRestaurant", () => {
 
     expect(seededScore.total).toBeGreaterThan(unseededScore.total);
   });
+
+  test("does not double-count when the DB counters and real swipe history cover the same cluster", () => {
+    // normalizeCuisine("cafe") falls back to "cafe" unchanged -- it has no
+    // CUISINE_CLUSTERS entry -- so the raw DB key updatePreferencesOnSwipe
+    // writes collides exactly with the cluster key buildWeightedProfile
+    // derives from the same real swipe. Merging prefs on top of the decayed
+    // profile for a key they both already cover would double-count that
+    // swipe; the score should be identical to not having prefs data at all.
+    const cafeRestaurant: RestaurantInput = { id: "r2", cuisine: "cafe", priceLevel: "$$" };
+    const cafeSwipe: SwipeRecord[] = [
+      { direction: "LIKE", restaurant: { cuisine: "cafe", priceLevel: "$$" }, createdAt: new Date() },
+    ];
+
+    const prefsMirroringTheSwipe = empty();
+    prefsMirroringTheSwipe.likedCuisines = { cafe: 1 };
+    prefsMirroringTheSwipe.priceCounts = { "$$": 1 };
+    prefsMirroringTheSwipe.totalLikes = 1;
+
+    const withPrefs = scoreRestaurant(cafeRestaurant, prefsMirroringTheSwipe, { userSwipes: cafeSwipe, cfScore: null });
+    const withoutPrefs = scoreRestaurant(cafeRestaurant, empty(), { userSwipes: cafeSwipe, cfScore: null });
+
+    expect(withPrefs.cuisineScore).toBe(withoutPrefs.cuisineScore);
+    expect(withPrefs.priceScore).toBe(withoutPrefs.priceScore);
+  });
 });
