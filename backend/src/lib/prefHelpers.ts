@@ -99,10 +99,16 @@ export async function fetchMLData(
   userSwipes:  SwipeRecord[];
   getCFScore:  (restaurantId: string) => number | null;
 }> {
+  // Bounded like the global CF query below -- decay makes swipes past this
+  // near-worthless to the scorer anyway (temporalDecayWeight's half-life is
+  // measured in days, not hundreds of interactions), so this trades a
+  // negligible amount of long-tail signal for a hard cap on how much a
+  // heavy user's history costs to load on every feed request.
   const userSwipesPromise = prisma.swipe.findMany({
     where:   { userId },
     include: { restaurant: { select: { cuisine: true, priceLevel: true } } },
     orderBy: { createdAt: "desc" },
+    take:    500,
   });
 
   // CF vectors come from the module-level cache — O(1) on cache hit, O(3000) on miss.
