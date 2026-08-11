@@ -65,6 +65,14 @@ app.get("/health", (_req, res) => {
   });
 });
 
+//404 HANDLER
+// Every real route is registered above; anything left unmatched gets a JSON
+// 404 instead of Express's default HTML error page, keeping this an
+// all-JSON API even for unknown paths.
+app.use((_req, res) => {
+  res.status(404).json({ error: "Not found" });
+});
+
 //GLOBAL ERROR HANDLER
 // Catches any unhandled errors thrown inside route handlers, plus body-parser
 // errors from express.json() (malformed JSON -> 400, oversized body -> 413)

@@ -34,6 +34,16 @@ describe("GET /health", () => {
   });
 });
 
+describe("404 handler", () => {
+  test("returns JSON, not Express's default HTML error page", async () => {
+    const res = await fetch(`${baseUrl}/this-route-does-not-exist`);
+    expect(res.status).toBe(404);
+    expect(res.headers.get("content-type")).toContain("application/json");
+    const body = await res.json();
+    expect(body.error).toBe("Not found");
+  });
+});
+
 describe("global error handler", () => {
   test("reports malformed JSON as 400, not a generic 500", async () => {
     // express.json() throws before any route handler runs, with its own
