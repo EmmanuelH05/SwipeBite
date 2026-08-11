@@ -55,6 +55,11 @@ export function useRestaurantFeed({ userId, setLoading, setError }: UseRestauran
         method: "POST",
         body: JSON.stringify({ restaurantId, direction }),
       });
+      if (!res.ok) {
+        const body: { error?: string } = await res.json().catch(() => ({}));
+        setError(body.error ?? `Failed to record swipe (${res.status})`);
+        return;
+      }
       const created = await res.json();
       setRestaurants((prev) => prev.filter((r) => r.id !== restaurantId));
       if (direction === "LIKE" && restaurant && created?.id) {
