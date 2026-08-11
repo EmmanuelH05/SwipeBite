@@ -47,15 +47,8 @@ export function useRestaurantFeed({ userId, setLoading, setError }: UseRestauran
           setError(body.error ?? `Failed to load matches (${res.status})`);
           return;
         }
-        const data: Match[] | Restaurant[] = await res.json();
-        const m = Array.isArray(data) ? data : [];
-        setMatches(
-          m.map((item) =>
-            "restaurant" in item
-              ? (item as Match)
-              : { restaurant: item as Restaurant, swipeId: "", visitedAt: null, experience: null, notes: null }
-          )
-        );
+        const data: Match[] = await res.json();
+        setMatches(Array.isArray(data) ? data : []);
       })
       .catch(() => setError("Failed to load matches. Is the backend running?"))
       .finally(() => setLoading(false));
