@@ -304,9 +304,9 @@ describe("hybridScore", () => {
     expect(result.total).toBeLessThanOrEqual(100);
   });
 
-  test("without CF, cfScore is reported as -1 and CF doesn't factor into the total", () => {
+  test("without CF, cfScore is reported as null and CF doesn't factor into the total", () => {
     const result = hybridScore({ restaurant, weightedProfile: emptyProfile, cfScore: null, totalInteractions: 3 });
-    expect(result.cfScore).toBe(-1);
+    expect(result.cfScore).toBeNull();
   });
 
   test("with CF available, a high CF score pushes the total up relative to without it", () => {

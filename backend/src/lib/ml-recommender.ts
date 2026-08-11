@@ -445,7 +445,7 @@ export type MLScoreBreakdown = {
   priceScore: number;
   timeScore: number;
   explorationScore: number;
-  cfScore: number;
+  cfScore: number | null;
   explanation: string;
   signals: string[];
 };
@@ -538,7 +538,7 @@ export function hybridScore(input: MLScoreInput): MLScoreBreakdown {
     priceScore:       Math.round(price.score * 100),
     timeScore:        Math.round(time.score * 100),
     explorationScore: Math.round(exploration * 100),
-    cfScore:          cfScore !== null ? Math.round(cfScore * 100) : -1,
+    cfScore:          cfScore !== null ? Math.round(cfScore * 100) : null,
     explanation,
     signals: [
       `cuisine:${Math.round(cuisine.score * 100)}`,
