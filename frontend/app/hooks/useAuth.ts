@@ -113,11 +113,24 @@ export function useAuth({ setLoading, setError }: UseAuthParams) {
   };
 
   const handleOnboardingComplete = async (cuisines: string[], priceLevel: string) => {
+    // Non-critical by design: even if seeding fails, the user still
+    // finishes onboarding below rather than getting stuck. But apiFetch
+    // only rejects on a network failure -- it resolves normally on a 4xx --
+    // so a validation rejection (backend enforces an allowed cuisine/price
+    // set) was previously invisible: onboarding would report success with
+    // no taste profile actually seeded, and no way to notice or retry since
+    // seededAt would stay unset. Logged (not user-facing) since this
+    // shouldn't block or alarm the user for what's an edge case today (the
+    // frontend's cuisine/price lists already match the backend's allowlist).
     try {
-      await apiFetch(`${API_URL}/onboarding/seed`, {
+      const res = await apiFetch(`${API_URL}/onboarding/seed`, {
         method: "PATCH",
         body: JSON.stringify({ cuisines, priceLevel }),
       });
+      if (!res.ok) {
+        const body: { error?: string } = await res.json().catch(() => ({}));
+        console.warn("Onboarding seed failed:", body.error ?? res.status);
+      }
     } catch { /* non-critical */ }
 
     // This one is never allowed to throw out of handleOnboardingComplete:
