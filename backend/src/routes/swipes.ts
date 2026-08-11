@@ -109,20 +109,16 @@ router.patch("/:id/visited", requireAuth, async (req: AuthRequest, res) => {
       include: { restaurant: true },
     });
 
-    // When the visit was disappointing, immediately bump the dislike counter.
-    // Same read-modify-write shape as POST /swipes above, same fix: route it
-    // through applyPreferenceUpdate instead of an unserialized fire-and-forget
-    // read-then-write.
+    // When the visit was disappointing, route it through updatePreferencesOnSwipe
+    // as a DISLIKE -- same as every other preference mutation path -- so
+    // totalDislikes (the counter that gates CF eligibility elsewhere) stays in
+    // sync with dislikedCuisines instead of drifting out of lockstep. Previously
+    // this hand-built the update and only touched dislikedCuisines.
     if (validatedExperience === "disappointing") {
-      const key = swipe.restaurant.cuisine.toLowerCase().replace(/_/g, " ");
       try {
-        await applyPreferenceUpdate(swipe.userId, (current) => ({
-          ...current,
-          dislikedCuisines: {
-            ...current.dislikedCuisines,
-            [key]: (current.dislikedCuisines[key] ?? 0) + 1,
-          },
-        }));
+        await applyPreferenceUpdate(swipe.userId, (current) =>
+          updatePreferencesOnSwipe(current, swipe.restaurant.cuisine, swipe.restaurant.priceLevel, "DISLIKE")
+        );
       } catch (e) {
         console.error("Visit quality preference update failed:", e);
       }
