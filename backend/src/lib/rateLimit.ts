@@ -26,6 +26,17 @@ export function createRateLimiter(limit: number, windowMs: number) {
       entry.count++;
       return true;
     },
+
+    /**
+     * Test-only: clears all recorded attempts. These limiters are
+     * module-level singletons shared across every test file in the same
+     * `bun test` process, so without this, integration tests that legitimately
+     * need several consume()s can get spuriously 429'd by quota another test
+     * file already used up.
+     */
+    reset(): void {
+      store.clear();
+    },
   };
 }
 

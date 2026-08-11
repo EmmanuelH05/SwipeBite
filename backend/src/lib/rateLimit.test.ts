@@ -37,4 +37,12 @@ describe("createRateLimiter", () => {
     const successes = results.filter(Boolean).length;
     expect(successes).toBe(5);
   });
+
+  test("reset() clears all recorded attempts", () => {
+    const limiter = createRateLimiter(1, 60_000);
+    expect(limiter.consume("a")).toBe(true);
+    expect(limiter.consume("a")).toBe(false);
+    limiter.reset();
+    expect(limiter.consume("a")).toBe(true);
+  });
 });
