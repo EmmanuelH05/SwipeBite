@@ -42,7 +42,13 @@ export function useVisitModal({ setMatches, setError }: UseVisitModalParams) {
         method: "PATCH",
         body: JSON.stringify({
           experience: experience?.trim() || undefined,
-          notes: notes !== undefined ? (notes.trim() || undefined) : undefined,
+          // Send the trimmed value as-is (even "") when notes was provided at
+          // all -- `notes.trim() || undefined` used to turn a cleared note
+          // into `undefined`, which JSON.stringify drops from the body
+          // entirely, so the backend never saw the key and left the old note
+          // untouched. An empty string reaches the backend's own
+          // `notes.trim() || null` and correctly clears it.
+          notes: notes !== undefined ? notes.trim() : undefined,
         }),
       });
       if (res.ok) {
