@@ -35,7 +35,7 @@ async function getGlobalCFVectors(): Promise<ReturnType<typeof buildUserVectors>
   const records: AllSwipeRecord[] = raw.map((s) => ({
     userId:       s.userId,
     restaurantId: s.restaurantId,
-    direction:    s.direction as "LIKE" | "DISLIKE",
+    direction:    s.direction,
   }));
   const vectors = buildUserVectors(records);
   cfVectorCache = { vectors, builtAt: Date.now() };
@@ -132,7 +132,7 @@ export async function fetchMLData(
   const [userSwipesRaw, cfVectors] = await Promise.all([userSwipesPromise, cfVectorsPromise]);
 
   const userSwipes: SwipeRecord[] = userSwipesRaw.map((s) => ({
-    direction:  s.direction as "LIKE" | "DISLIKE",
+    direction:  s.direction,
     restaurant: { cuisine: s.restaurant.cuisine, priceLevel: s.restaurant.priceLevel },
     experience: s.experience,
     createdAt:  s.createdAt,
