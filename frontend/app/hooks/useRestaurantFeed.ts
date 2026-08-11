@@ -70,9 +70,12 @@ export function useRestaurantFeed({ userId, setLoading, setError }: UseRestauran
       const created = await res.json();
       setRestaurants((prev) => prev.filter((r) => r.id !== restaurantId));
       if (direction === "LIKE" && restaurant && created?.id) {
+        // Prepended, not appended: GET /matches returns newest-first
+        // (backend orders by createdAt desc) -- appending here put a fresh
+        // like at the bottom of the list until the next refetch reordered it.
         setMatches((prev) => [
-          ...prev,
           { restaurant, swipeId: created.id, visitedAt: created.visitedAt ?? null },
+          ...prev,
         ]);
         // Show score reveal if the restaurant has a meaningful score
         if (restaurant.score && restaurant.score.total > 0) {
