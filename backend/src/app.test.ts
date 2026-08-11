@@ -26,6 +26,10 @@ describe("GET /health", () => {
     const res = await fetch(`${baseUrl}/health`);
     const body = await res.json();
     expect(res.status).toBe(200);
-    expect(body.preferenceUpdateFailures).toEqual({ count: 0, lastFailure: null });
+    expect(body.preferenceUpdateFailures).toEqual({ count: 0, lastFailureAt: null });
+    // No error message field -- this is a public, unauthenticated endpoint,
+    // and Prisma error messages can embed the DB host/port.
+    expect(body.preferenceUpdateFailures).not.toHaveProperty("message");
+    expect(body.preferenceUpdateFailures).not.toHaveProperty("lastFailure");
   });
 });

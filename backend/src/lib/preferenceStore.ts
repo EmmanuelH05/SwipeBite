@@ -12,11 +12,17 @@ import type { UserPreferenceData } from "./personalization";
 // completely invisible -- nothing but scattered console.error lines. This
 // project has no metrics pipeline, so track a simple in-process counter
 // here and surface it on /health instead.
+// Only a count + timestamp -- no error message -- because this is exposed
+// unauthenticated via GET /health. Prisma connection failures (precisely the
+// systemic class this counter exists to catch) embed the DB host/port in
+// err.message, and query errors can embed model/column names; a public
+// liveness probe isn't the place for that. Callers already console.error the
+// full error server-side.
 let failureCount = 0;
-let lastFailure: { message: string; at: string } | null = null;
+let lastFailureAt: string | null = null;
 
-export function getPreferenceUpdateFailureStats(): { count: number; lastFailure: typeof lastFailure } {
-  return { count: failureCount, lastFailure };
+export function getPreferenceUpdateFailureStats(): { count: number; lastFailureAt: string | null } {
+  return { count: failureCount, lastFailureAt };
 }
 
 /**
@@ -55,7 +61,7 @@ export async function applyPreferenceUpdate(
     });
   } catch (err) {
     failureCount++;
-    lastFailure = { message: err instanceof Error ? err.message : String(err), at: new Date().toISOString() };
+    lastFailureAt = new Date().toISOString();
     throw err;
   }
 }
