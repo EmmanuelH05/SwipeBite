@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import Button from "../../ui/Button/Button";
 import type { Match } from "../../../lib/types";
 import styles from "./VisitModal.module.css";
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 type VisitModalMode = "add" | "view" | "edit";
 
@@ -31,8 +34,39 @@ export default function VisitModal({
   match, mode, experience, notes,
   onExperienceChange, onNotesChange, onClose, onSave, onEdit,
 }: VisitModalProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Focus the dialog on open and restore focus to whatever had it before
+  // (the "Visit" button that opened this modal, typically) on close --
+  // without this, focus silently stays on a now-hidden trigger element.
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+    return () => previouslyFocused?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return; }
+
+      // Trap Tab within the dialog -- without this, tabbing past the last
+      // focusable element (or shift-tabbing past the first) moves focus to
+      // whatever's behind the modal in the page, which a screen reader user
+      // has no way to know is now hidden behind an open dialog.
+      if (e.key === "Tab" && panelRef.current) {
+        const focusable = panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
@@ -45,9 +79,6 @@ export default function VisitModal({
   return (
     <motion.div
       className={styles.backdrop}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="visit-modal-title"
       onClick={onClose}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -57,7 +88,12 @@ export default function VisitModal({
       <div className={styles.overlay} />
 
       <motion.div
+        ref={panelRef}
         className={styles.panel}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="visit-modal-title"
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         initial={{ opacity: 0, y: 32, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
