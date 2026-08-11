@@ -21,7 +21,7 @@ export default function CardStack({ current, next, swipeCardProps, cardRef }: Ca
     <div className={styles.stack}>
       <div className={styles.cardArea}>
         {next && <CardBack restaurant={next} />}
-        <SwipeCard ref={cardRef} restaurant={current} {...swipeCardProps} />
+        <SwipeCard key={current.id} ref={cardRef} restaurant={current} {...swipeCardProps} />
       </div>
       <SwipeActions onPass={onPass} onLike={onLike} disabled={disabled} />
     </div>
