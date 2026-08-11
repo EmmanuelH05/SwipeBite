@@ -62,13 +62,25 @@ type RawPref = {
 
 //HELPERS
 
+// Every current write path produces a well-formed plain object in these Json
+// columns, but nothing in the type system enforces that -- a future
+// migration, admin script, or manual DB edit that leaves a JSON array,
+// string, or null in one of these columns would otherwise flow straight into
+// the scoring engine's arithmetic (likedClusters[cluster] ?? 0) as `unknown`
+// cast directly to a numeric map. Degrade to "no data" instead.
+function asCountMap(value: unknown): Record<string, number> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, number>)
+    : {};
+}
+
 /** Shapes a Prisma UserPreference row into the typed object the scorer expects. */
 export function buildPrefData(pref: RawPref): UserPreferenceData {
   if (!pref) return emptyPrefData();
   return {
-    likedCuisines:    pref.likedCuisines    as Record<string, number>,
-    dislikedCuisines: pref.dislikedCuisines as Record<string, number>,
-    priceCounts:      pref.priceCounts       as Record<string, number>,
+    likedCuisines:    asCountMap(pref.likedCuisines),
+    dislikedCuisines: asCountMap(pref.dislikedCuisines),
+    priceCounts:      asCountMap(pref.priceCounts),
     totalLikes:       pref.totalLikes,
     totalDislikes:    pref.totalDislikes,
     morningLikes:     pref.morningLikes,
