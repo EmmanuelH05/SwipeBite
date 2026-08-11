@@ -5,6 +5,7 @@ import { Router } from "express";
 import { prisma }                    from "../lib/prisma";
 import { updatePreferencesOnSwipe }  from "../lib/personalization";
 import { buildPrefData }             from "../lib/prefHelpers";
+import { CUISINE_CLUSTERS }          from "../lib/ml-recommender";
 import { requireAuth }               from "../middleware/auth";
 import type { AuthRequest }          from "../middleware/auth";
 
@@ -13,6 +14,9 @@ const router = Router();
 
 const SEED_STRENGTH_DEFAULT = 3;
 const SEED_STRENGTH_MAX     = 10;
+const MAX_SEED_CUISINES     = 20;
+const VALID_CUISINES        = new Set(Object.keys(CUISINE_CLUSTERS));
+const VALID_PRICE_LEVELS    = new Set(["$", "$$", "$$$"]);
 
 /**
  * PATCH /onboarding/seed — bootstrap a new user's taste profile from
@@ -29,8 +33,12 @@ router.patch("/seed", requireAuth, async (req: AuthRequest, res) => {
 
     if (!Array.isArray(cuisines) || cuisines.length === 0)
       return res.status(400).json({ error: "cuisines must be a non-empty array" });
-    if (!priceLevel || typeof priceLevel !== "string")
-      return res.status(400).json({ error: "priceLevel is required" });
+    if (cuisines.length > MAX_SEED_CUISINES)
+      return res.status(400).json({ error: `cuisines must contain at most ${MAX_SEED_CUISINES} entries` });
+    if (!cuisines.every((c) => typeof c === "string" && VALID_CUISINES.has(c)))
+      return res.status(400).json({ error: `cuisines must only contain: ${[...VALID_CUISINES].join(", ")}` });
+    if (!priceLevel || typeof priceLevel !== "string" || !VALID_PRICE_LEVELS.has(priceLevel))
+      return res.status(400).json({ error: "priceLevel must be one of: $, $$, $$$" });
 
     const strength = Math.min(
       typeof seedStrength === "number" && seedStrength > 0 ? seedStrength : SEED_STRENGTH_DEFAULT,
