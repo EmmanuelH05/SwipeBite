@@ -20,3 +20,16 @@ export function getMissingRequiredVars(env: NodeJS.ProcessEnv, required: string[
 export function isWeakSecretUnsafe(nodeEnv: string | undefined, secret: string | undefined): boolean {
   return nodeEnv !== "development" && !!secret && WEAK_SECRETS.includes(secret);
 }
+
+/**
+ * Returns true when TRUST_PROXY_HOPS is set but isn't a non-negative
+ * integer. Unset is fine (app.ts defaults it to 0). A malformed value
+ * already fails safe at runtime (Number() -> NaN -> Express trusts
+ * nothing), but silently misconfiguring the one setting that stands
+ * between the rate limiters and a spoofed X-Forwarded-For deserves the
+ * same fail-fast treatment as every other env var here, not a silent
+ * fallback.
+ */
+export function isTrustProxyHopsInvalid(value: string | undefined): boolean {
+  return value !== undefined && !/^\d+$/.test(value);
+}

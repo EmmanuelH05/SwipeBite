@@ -2,7 +2,7 @@
 import "dotenv/config";
 
 //LOCAL FILES
-import { getMissingRequiredVars, isWeakSecretUnsafe } from "./lib/startupChecks";
+import { getMissingRequiredVars, isWeakSecretUnsafe, isTrustProxyHopsInvalid } from "./lib/startupChecks";
 import { prisma } from "./lib/prisma";
 import { app } from "./app";
 
@@ -18,6 +18,10 @@ if (missing.length > 0) {
 }
 if (isWeakSecretUnsafe(process.env.NODE_ENV, process.env.JWT_SECRET)) {
   console.error("[startup] JWT_SECRET is a placeholder — run: openssl rand -hex 32");
+  process.exit(1);
+}
+if (isTrustProxyHopsInvalid(process.env.TRUST_PROXY_HOPS)) {
+  console.error(`[startup] TRUST_PROXY_HOPS must be a non-negative integer, got: ${process.env.TRUST_PROXY_HOPS}`);
   process.exit(1);
 }
 

@@ -46,6 +46,12 @@ cd backend && bun test
 | `GOOGLE_API_KEY` | Google Places API (New) for `/restaurants/load` |
 | `FRONTEND_URL` | CORS allowed origin (default: `http://localhost:3000`) |
 
+### Optional backend env vars
+
+| Var | Purpose |
+|-----|---------|
+| `TRUST_PROXY_HOPS` | Number of reverse-proxy hops Express should trust for resolving the real client IP from `X-Forwarded-For` (default: `0` — trust nothing). The default is safe for this repo's `docker-compose.yml`, which exposes the backend directly with no proxy in front. **Deployments that do put a reverse proxy in front (nginx, an ALB, etc.) must set this to the real hop count**, or every IP-keyed rate limiter (auth brute-force, Google Places load quota, photo proxy quota) will key on the proxy's own address instead of the client's — collapsing everyone behind it into one shared quota. Must be a non-negative integer; startup fails fast otherwise. |
+
 ### Frontend env (embedded at build time)
 
 | Var | Purpose |

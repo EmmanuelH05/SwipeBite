@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { getMissingRequiredVars, isWeakSecretUnsafe, WEAK_SECRETS } from "./startupChecks";
+import { getMissingRequiredVars, isWeakSecretUnsafe, isTrustProxyHopsInvalid, WEAK_SECRETS } from "./startupChecks";
 
 describe("getMissingRequiredVars", () => {
   test("returns keys absent from env", () => {
@@ -37,5 +37,19 @@ describe("isWeakSecretUnsafe", () => {
 
   test("allows an unset secret to pass through here -- caught separately by the required-vars check", () => {
     expect(isWeakSecretUnsafe("production", undefined)).toBe(false);
+  });
+});
+
+describe("isTrustProxyHopsInvalid", () => {
+  test("allows unset -- app.ts defaults it to 0", () => {
+    expect(isTrustProxyHopsInvalid(undefined)).toBe(false);
+  });
+
+  test.each(["0", "1", "5", "42"])("allows a non-negative integer string: %s", (v) => {
+    expect(isTrustProxyHopsInvalid(v)).toBe(false);
+  });
+
+  test.each(["-1", "1.5", "abc", "", " ", "1 hop", "NaN"])("rejects: %j", (v) => {
+    expect(isTrustProxyHopsInvalid(v)).toBe(true);
   });
 });
