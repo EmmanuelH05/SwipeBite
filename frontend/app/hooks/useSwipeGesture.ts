@@ -93,7 +93,10 @@ export function useSwipeGesture(
     [current, applyCardTransform]
   );
 
-  const handleTouchEnd = useCallback(() => {
+  // Touch-end and mouse-up commit the same in-progress drag the same way --
+  // neither reads anything from its triggering event, so one handler serves
+  // both instead of maintaining two copies of this logic in lockstep.
+  const commitDrag = useCallback(() => {
     if (gestureLockRef.current !== "card") { touchStartRef.current = null; return; }
     const offset = dragOffsetRef.current;
     const id = cardIdRef.current;
@@ -122,6 +125,8 @@ export function useSwipeGesture(
       else if (id && offset <= -SWIPE_THRESHOLD) applySwipeResult(id, "DISLIKE");
     }
   }, [applySwipeResult]);
+
+  const handleTouchEnd = commitDrag;
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -154,35 +159,7 @@ export function useSwipeGesture(
     [current, applyCardTransform]
   );
 
-  const handleMouseUp = useCallback(() => {
-    if (gestureLockRef.current !== "card") { touchStartRef.current = null; return; }
-    const offset = dragOffsetRef.current;
-    const id = cardIdRef.current;
-    dragOffsetRef.current = 0;
-    cardIdRef.current = null;
-    setCardDragOffset(0);
-    touchStartRef.current = null;
-    gestureLockRef.current = null;
-    if (cardRef.current) {
-      if (id && offset >= SWIPE_THRESHOLD) {
-        cardRef.current.style.transition = "transform 0.2s ease-out";
-        cardRef.current.style.transform = "translateX(120%) rotate(12deg)";
-        applySwipeResult(id, "LIKE");
-      } else if (id && offset <= -SWIPE_THRESHOLD) {
-        cardRef.current.style.transition = "transform 0.2s ease-out";
-        cardRef.current.style.transform = "translateX(-120%) rotate(-12deg)";
-        applySwipeResult(id, "DISLIKE");
-      } else {
-        cardRef.current.style.transition = "transform 0.25s ease-out";
-        cardRef.current.style.transform = "translateX(0) rotate(0)";
-        const el = cardRef.current;
-        setTimeout(() => { el.style.transform = ""; el.style.transition = ""; }, 260);
-      }
-    } else {
-      if (id && offset >= SWIPE_THRESHOLD) applySwipeResult(id, "LIKE");
-      else if (id && offset <= -SWIPE_THRESHOLD) applySwipeResult(id, "DISLIKE");
-    }
-  }, [applySwipeResult]);
+  const handleMouseUp = commitDrag;
 
   useEffect(() => {
     if (!current) return;
