@@ -5,7 +5,7 @@ import { Router } from "express";
 import { prisma }                    from "../lib/prisma";
 import { updatePreferencesOnSwipe }  from "../lib/personalization";
 import { buildPrefData }             from "../lib/prefHelpers";
-import { CUISINE_CLUSTERS }          from "../lib/ml-recommender";
+import { CUISINE_CLUSTERS, PRICE_LEVELS } from "../lib/ml-recommender";
 import { requireAuth }               from "../middleware/auth";
 import type { AuthRequest }          from "../middleware/auth";
 
@@ -16,7 +16,7 @@ const SEED_STRENGTH_DEFAULT = 3;
 const SEED_STRENGTH_MAX     = 10;
 const MAX_SEED_CUISINES     = 20;
 const VALID_CUISINES        = new Set(Object.keys(CUISINE_CLUSTERS));
-const VALID_PRICE_LEVELS    = new Set(["$", "$$", "$$$"]);
+const VALID_PRICE_LEVELS    = new Set<string>(PRICE_LEVELS);
 
 /**
  * PATCH /onboarding/seed — bootstrap a new user's taste profile from

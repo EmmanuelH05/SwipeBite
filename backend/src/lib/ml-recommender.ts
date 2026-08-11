@@ -76,6 +76,17 @@ export const CUISINE_CLUSTERS: Record<string, string[]> = {
   ],
 };
 
+// The app's three price tiers. Restaurant.priceLevel and UserPreferenceData's
+// priceCounts keys stay plain `string` throughout the scoring pipeline --
+// they're read from a Prisma `String` column with no DB-level enum backing
+// it, so narrowing those types would just move an unchecked cast to every
+// restaurant read on the hot feed path rather than actually closing the
+// hole. This closed type is used where it's cheaply enforceable instead:
+// the single write path that produces these values (restaurants.ts's
+// Google Places price mapping) and onboarding's request validation.
+export const PRICE_LEVELS = ["$", "$$", "$$$"] as const;
+export type PriceLevel = (typeof PRICE_LEVELS)[number];
+
 // Takes a raw cuisine string and returns the cluster name it belongs to.
 // Falls back to the normalized string itself if nothing matches.
 export function normalizeCuisine(raw: string): string {

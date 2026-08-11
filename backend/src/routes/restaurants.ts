@@ -6,6 +6,7 @@ import { prisma } from "../lib/prisma";
 import { restaurantLoadLimiter } from "../lib/rateLimit";
 import { clientIp } from "../lib/clientIp";
 import { rankUnswipedForUser } from "../lib/prefHelpers";
+import type { PriceLevel } from "../lib/ml-recommender";
 import { requireAuth } from "../middleware/auth";
 import type { AuthRequest } from "../middleware/auth";
 
@@ -121,10 +122,16 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
       await new Promise((r) => setTimeout(r, 200));
     }
 
-    const priceMap: Record<string, string> = {
-      PRICE_LEVEL_INEXPENSIVE: "$",
-      PRICE_LEVEL_MODERATE:    "$$",
-      PRICE_LEVEL_EXPENSIVE:   "$$$",
+    // Google's price enum also has PRICE_LEVEL_VERY_EXPENSIVE, which this
+    // app's 3-tier model has no distinct slot for -- it used to fall through
+    // to the unmapped-value default below ("$$", moderate), silently
+    // miscategorizing very-expensive restaurants as mid-range. Map it to the
+    // closest available tier ("$$$") instead of leaving it unmapped.
+    const priceMap: Record<string, PriceLevel> = {
+      PRICE_LEVEL_INEXPENSIVE:   "$",
+      PRICE_LEVEL_MODERATE:      "$$",
+      PRICE_LEVEL_EXPENSIVE:     "$$$",
+      PRICE_LEVEL_VERY_EXPENSIVE: "$$$",
     };
 
     // A place with neither `id` nor `name` has no stable key to upsert on --
