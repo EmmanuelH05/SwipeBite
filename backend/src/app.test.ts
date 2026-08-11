@@ -33,3 +33,19 @@ describe("GET /health", () => {
     expect(body.preferenceUpdateFailures).not.toHaveProperty("lastFailure");
   });
 });
+
+describe("global error handler", () => {
+  test("reports malformed JSON as 400, not a generic 500", async () => {
+    // express.json() throws before any route handler runs, with its own
+    // `status` (400 for a parse failure) -- the handler used to discard
+    // that and always answer 500 "An unexpected error occurred".
+    const res = await fetch(`${baseUrl}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{not valid json",
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).not.toBe("An unexpected error occurred");
+  });
+});

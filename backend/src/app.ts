@@ -66,9 +66,18 @@ app.get("/health", (_req, res) => {
 });
 
 //GLOBAL ERROR HANDLER
-// Catches any unhandled errors thrown inside route handlers
+// Catches any unhandled errors thrown inside route handlers, plus body-parser
+// errors from express.json() (malformed JSON -> 400, oversized body -> 413)
+// which throw before any route handler runs. Those come with their own
+// `status`, which used to be discarded here -- every parse/size error was
+// reported to the client as a generic 500 "unexpected error" instead of the
+// 4xx it actually is.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Unhandled error:", err);
+  const status = (err as { status?: unknown }).status ?? (err as { statusCode?: unknown }).statusCode;
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    return res.status(status).json({ error: err.message || "Bad request" });
+  }
   res.status(500).json({ error: "An unexpected error occurred" });
 });
