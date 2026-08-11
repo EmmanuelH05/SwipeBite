@@ -94,6 +94,7 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
 
     const allPlaces: Place[] = [];
     let pageToken: string | undefined;
+    let partial = false;
 
     for (let page = 0; page < 10; page++) {
       const body: {
@@ -118,6 +119,10 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
         const errText = await resp.text();
         console.error("Google Places API error:", resp.status, errText);
         if (page === 0) return res.status(502).json({ error: "Google Places API request failed" });
+        // A later page failed (e.g. transient 503/429) -- stop paginating,
+        // but don't report this as a clean success: the caller has no other
+        // way to know results are incomplete vs. genuinely exhausted.
+        partial = true;
         break;
       }
 
@@ -164,7 +169,11 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
       created += batch.length;
     }
 
-    return res.json({ loaded: created, location: location.trim() });
+    return res.json({
+      loaded: created,
+      location: location.trim(),
+      ...(partial ? { partial: true } : {}),
+    });
   } catch (err) {
     console.error("POST /restaurants/load error:", err);
     return res.status(500).json({ error: "Failed to load restaurants" });
