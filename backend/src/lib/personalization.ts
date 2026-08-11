@@ -154,16 +154,6 @@ export function scoreRestaurant(
   };
 }
 
-export function sortByScore(
-  restaurants: RestaurantInput[],
-  prefs: UserPreferenceData,
-  mlCtx?: MLContext
-): Array<RestaurantInput & { score: ScoreBreakdown }> {
-  return restaurants
-    .map((r) => ({ ...r, score: scoreRestaurant(r, prefs, mlCtx) }))
-    .sort((a, b) => b.score.total - a.score.total);
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // updatePreferencesOnSwipe
 //
