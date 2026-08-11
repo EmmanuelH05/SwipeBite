@@ -99,7 +99,7 @@ export function useRestaurantFeed({ userId, setLoading, setError }: UseRestauran
       try {
         data = text ? JSON.parse(text) : {};
       } catch {
-        setError(res.ok ? "Backend returned invalid JSON." : `Request failed (${res.status}). Restart the backend and run: npx prisma generate`);
+        setError(res.ok ? "Backend returned invalid JSON." : `Request failed (${res.status}). Please try again.`);
         setLoadLoading(false);
         return;
       }
@@ -122,7 +122,7 @@ export function useRestaurantFeed({ userId, setLoading, setError }: UseRestauran
         setError(data.error || `Request failed (${res.status})`);
       }
     } catch {
-      setError("Can't reach backend. Is it running on http://localhost:4000?");
+      setError(`Can't reach the backend at ${API_URL}.`);
     }
     setLoadLoading(false);
   };
