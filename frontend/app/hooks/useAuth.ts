@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { API_URL, TOKEN_KEY } from "../lib/constants";
+import { API_URL } from "../lib/constants";
 import type { User } from "../lib/types";
-import { apiFetch, setTokens, clearTokens, getRefreshToken } from "../lib/utils";
+import { apiFetch, setTokens, clearTokens, getAccessToken, getRefreshToken } from "../lib/utils";
 
 /**
  * Demo mode: a link shaped like `/?at=<accessToken>&rt=<refreshToken>` logs
@@ -40,7 +40,7 @@ export function useAuth({ setLoading, setError }: UseAuthParams) {
 
   useEffect(() => {
     injectDemoTokensFromUrl();
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = getAccessToken();
     if (!token) { setAuthLoading(false); return; }
     apiFetch(`${API_URL}/auth/me`)
       .then((res) => {

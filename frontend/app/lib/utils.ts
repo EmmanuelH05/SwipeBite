@@ -4,12 +4,14 @@ import { API_URL, TOKEN_KEY, REFRESH_TOKEN_KEY } from "./constants";
 
 /** Persists both tokens after a successful login or register. */
 export function setTokens(accessToken: string, refreshToken: string): void {
+  if (typeof window === "undefined") return;
   localStorage.setItem(TOKEN_KEY, accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 }
 
 /** Removes both tokens (used on logout or when refresh fails). */
 export function clearTokens(): void {
+  if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
