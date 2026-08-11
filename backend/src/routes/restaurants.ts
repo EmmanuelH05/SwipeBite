@@ -87,6 +87,9 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
       } = { textQuery: `restaurants in ${location.trim()}`, includedType: "restaurant", pageSize: 20 };
       if (pageToken) body.pageToken = pageToken;
 
+      // Without a timeout, a hung upstream pins this request (and the
+      // waiting client) indefinitely -- up to 10 sequential un-aborted round
+      // trips in the worst case.
       const resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
         method: "POST",
         headers: {
@@ -95,6 +98,7 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
           "X-Goog-FieldMask": fieldMask,
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10_000),
       });
 
       if (!resp.ok) {
