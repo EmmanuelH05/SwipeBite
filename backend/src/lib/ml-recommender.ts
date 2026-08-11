@@ -4,7 +4,7 @@
  * This is the heart of the recommendation system. I'm combining a few different
  * techniques I learned about in my ML class: content-based filtering (using
  * the user's own history), collaborative filtering (borrowing from similar users),
- * and a UCB exploration bonus so we don't just keep showing the same stuff forever.
+ * and Thompson Sampling exploration so we don't just keep showing the same stuff forever.
  *
  * The whole thing is written in plain TypeScript — no ML libraries needed. Most of
  * this is just linear algebra and a couple of smart formulas.
@@ -219,11 +219,10 @@ export function buildWeightedProfile(swipes: SwipeRecord[]): WeightedProfile {
 //   User A: { restaurantX: +1, restaurantY: -1, restaurantZ: +1 }
 //   User B: { restaurantX: +1, restaurantY: +1, restaurantZ: +1 }
 //
-// Step 2 — Compute cosine similarity between User A and every other user.
-//   Cosine similarity = dot(A, B) / (|A| * |B|)
-//   If angle = 0°, cos = 1 → perfect taste match
-//   If angle = 90°, cos = 0 → nothing in common
-//   We ignore negative similarity (opposite taste)
+// Step 2 — Compute Pearson correlation between User A and every other user
+//   over their shared (co-rated) restaurants -- see pearsonSimilarity below
+//   for why Pearson instead of cosine. Result ranges -1 (opposite taste) to
+//   +1 (perfect taste match); we ignore negative similarity when scoring.
 //
 // Step 3 — For a target restaurant, take a weighted average of what similar
 //   users think. Users who are more similar to you get more weight.
@@ -419,10 +418,10 @@ export function computeClusterCuisineScore(
 // The final score blends all the signals above. I use different weights depending
 // on whether we have CF data or not:
 //
-//   WITH CF:    cuisine 28% + price 15% + time 10% + CF 30% + exploration 17%
-//   WITHOUT CF: cuisine 40% + price 20% + time 13% + exploration 27%
+//   WITH CF:    cuisine 32% + price 18% + time 8% + CF 28% + exploration 14%
+//   WITHOUT CF: cuisine 45% + price 22% + time 10% + exploration 23%
 //
-// The CF signal gets a big chunk (30%) because "similar users liked this" is
+// The CF signal gets a big chunk (28%) because "similar users liked this" is
 // really strong evidence. When CF isn't available yet (new user, sparse data),
 // content-based and exploration fill the gap.
 // ─────────────────────────────────────────────────────────────────────────────
