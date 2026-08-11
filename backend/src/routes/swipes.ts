@@ -48,7 +48,7 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     // shouldn't fail a swipe that already succeeded.
     try {
       await applyPreferenceUpdate(userId, (current) =>
-        updatePreferencesOnSwipe(current, restaurant.cuisine, restaurant.priceLevel, direction as "LIKE" | "DISLIKE")
+        updatePreferencesOnSwipe(current, restaurant.cuisine, restaurant.priceLevel, direction)
       );
     } catch (e) {
       console.error("Preference update failed (non-critical):", e);
