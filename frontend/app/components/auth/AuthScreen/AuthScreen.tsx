@@ -106,6 +106,7 @@ export default function AuthScreen({
               onChange={(e) => onEmailChange(e.target.value)}
               onBlur={() => setTouched((t) => ({ ...t, email: true }))}
               placeholder="Email address"
+              aria-label="Email address"
               disabled={loading}
               autoComplete="email"
               error={emailError}
@@ -125,6 +126,7 @@ export default function AuthScreen({
                   onChange={(e) => onNameChange(e.target.value)}
                   onBlur={() => setTouched((t) => ({ ...t, name: true }))}
                   placeholder="Your name"
+                  aria-label="Your name"
                   disabled={loading}
                   autoComplete="name"
                   error={nameError}
@@ -139,6 +141,7 @@ export default function AuthScreen({
               onChange={(e) => onPasswordChange(e.target.value)}
               onBlur={() => setTouched((t) => ({ ...t, password: true }))}
               placeholder={mode === "signup" ? "Password (min 8 chars, A-Z, 0-9)" : "Password"}
+              aria-label="Password"
               disabled={loading}
               autoComplete={mode === "signup" ? "new-password" : "current-password"}
               error={passwordError}
