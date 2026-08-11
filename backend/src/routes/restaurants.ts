@@ -155,15 +155,15 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
     // (slow -- up to ~200 awaited round trips, one at a time) or fully
     // parallel (risks exhausting the Prisma connection pool on a large load).
     const UPSERT_BATCH_SIZE = 20;
-    let created = 0;
+    let upserted = 0;
     for (let i = 0; i < upsertArgs.length; i += UPSERT_BATCH_SIZE) {
       const batch = upsertArgs.slice(i, i + UPSERT_BATCH_SIZE);
       await Promise.all(batch.map((args) => prisma.restaurant.upsert(args)));
-      created += batch.length;
+      upserted += batch.length;
     }
 
     return res.json({
-      loaded: created,
+      loaded: upserted,
       location: location.trim(),
       ...(partial ? { partial: true } : {}),
     });
