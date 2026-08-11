@@ -1,5 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { SWIPE_THRESHOLD, GESTURE_LOCK_THRESHOLD } from "../lib/constants";
+import {
+  SWIPE_THRESHOLD,
+  GESTURE_LOCK_THRESHOLD,
+  SWIPE_EXIT_DISTANCE_PERCENT,
+  SWIPE_EXIT_ROTATION_DEG,
+  DRAG_ROTATION_FACTOR,
+  SWIPE_EXIT_DURATION_MS,
+  SNAP_BACK_DURATION_MS,
+} from "../lib/constants";
 import type { Restaurant } from "../lib/types";
 
 /** Owns drag/swipe gesture state for the current top card (touch + mouse). */
@@ -23,7 +31,7 @@ export function useSwipeGesture(
   const applyCardTransform = useCallback((dx: number) => {
     if (!cardRef.current) return;
     cardRef.current.style.transition = "none";
-    cardRef.current.style.transform = `translateX(${dx}px) rotate(${dx * 0.06}deg)`;
+    cardRef.current.style.transform = `translateX(${dx}px) rotate(${dx * DRAG_ROTATION_FACTOR}deg)`;
   }, []);
 
   useEffect(() => {
@@ -56,7 +64,7 @@ export function useSwipeGesture(
         onSwipe(restaurantId, direction);
         setSwipeExit(null);
         setCardDragOffset(0);
-      }, 220);
+      }, SWIPE_EXIT_DURATION_MS);
     },
     [current, loading, onSwipe]
   );
@@ -108,17 +116,17 @@ export function useSwipeGesture(
     if (cardRef.current) {
       if (id && offset >= SWIPE_THRESHOLD) {
         cardRef.current.style.transition = "transform 0.2s ease-out";
-        cardRef.current.style.transform = "translateX(120%) rotate(12deg)";
+        cardRef.current.style.transform = `translateX(${SWIPE_EXIT_DISTANCE_PERCENT}%) rotate(${SWIPE_EXIT_ROTATION_DEG}deg)`;
         applySwipeResult(id, "LIKE");
       } else if (id && offset <= -SWIPE_THRESHOLD) {
         cardRef.current.style.transition = "transform 0.2s ease-out";
-        cardRef.current.style.transform = "translateX(-120%) rotate(-12deg)";
+        cardRef.current.style.transform = `translateX(-${SWIPE_EXIT_DISTANCE_PERCENT}%) rotate(-${SWIPE_EXIT_ROTATION_DEG}deg)`;
         applySwipeResult(id, "DISLIKE");
       } else {
         cardRef.current.style.transition = "transform 0.25s ease-out";
         cardRef.current.style.transform = "translateX(0) rotate(0)";
         const el = cardRef.current;
-        setTimeout(() => { el.style.transform = ""; el.style.transition = ""; }, 260);
+        setTimeout(() => { el.style.transform = ""; el.style.transition = ""; }, SNAP_BACK_DURATION_MS);
       }
     } else {
       if (id && offset >= SWIPE_THRESHOLD) applySwipeResult(id, "LIKE");

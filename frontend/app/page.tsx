@@ -16,6 +16,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useRestaurantFeed } from "./hooks/useRestaurantFeed";
 import { useSwipeGesture } from "./hooks/useSwipeGesture";
 import { useVisitModal } from "./hooks/useVisitModal";
+import { SWIPE_EXIT_DISTANCE_PERCENT, SWIPE_EXIT_ROTATION_DEG, DRAG_ROTATION_FACTOR } from "./lib/constants";
 import styles from "./page.module.css";
 
 export default function Home() {
@@ -126,9 +127,9 @@ export default function Home() {
                     style: {
                       transform: gesture.swipeExit
                         ? gesture.swipeExit === "LIKE"
-                          ? "translateX(120%) rotate(12deg)"
-                          : "translateX(-120%) rotate(-12deg)"
-                        : `translateX(${gesture.cardDragOffset}px) rotate(${gesture.cardDragOffset * 0.06}deg)`,
+                          ? `translateX(${SWIPE_EXIT_DISTANCE_PERCENT}%) rotate(${SWIPE_EXIT_ROTATION_DEG}deg)`
+                          : `translateX(-${SWIPE_EXIT_DISTANCE_PERCENT}%) rotate(-${SWIPE_EXIT_ROTATION_DEG}deg)`
+                        : `translateX(${gesture.cardDragOffset}px) rotate(${gesture.cardDragOffset * DRAG_ROTATION_FACTOR}deg)`,
                       transition: gesture.swipeExit ? "transform 0.2s ease-out" : "none",
                     },
                     dragOffset: gesture.cardDragOffset,
