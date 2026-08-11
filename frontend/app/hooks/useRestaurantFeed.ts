@@ -102,7 +102,7 @@ export function useRestaurantFeed({ userId, setLoading, setError }: UseRestauran
         body: JSON.stringify({ location: location.trim() }),
       });
       const text = await res.text();
-      let data: { error?: string; loaded?: number } = {};
+      let data: { error?: string; loaded?: number; partial?: boolean } = {};
       try {
         data = text ? JSON.parse(text) : {};
       } catch {
@@ -114,9 +114,17 @@ export function useRestaurantFeed({ userId, setLoading, setError }: UseRestauran
         setError(data.error);
       } else if (res.ok) {
         setLocation("");
+        // partial: true means the backend's pagination loop stopped early
+        // after some, but not all, pages loaded -- surface it instead of
+        // silently presenting a truncated result set as a full success.
+        if (data.partial) {
+          setError(`Loaded ${data.loaded ?? "some"} spots, but results were cut short -- try loading this location again to get the rest.`);
+        }
         const rRes = await apiFetch(`${API_URL}/restaurants`);
-        const rData = await rRes.json();
-        setRestaurants(Array.isArray(rData) ? rData : []);
+        if (rRes.ok) {
+          const rData = await rRes.json();
+          setRestaurants(Array.isArray(rData) ? rData : []);
+        }
       } else {
         setError(data.error || `Request failed (${res.status})`);
       }
