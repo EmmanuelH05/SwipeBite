@@ -3,6 +3,7 @@ import { Router } from "express";
 
 //LOCAL FILES
 import { photoProxyLimiter } from "../lib/rateLimit";
+import { clientIp } from "../lib/clientIp";
 
 //CONSTANTS
 const router = Router();
@@ -26,10 +27,7 @@ const PHOTO_NAME_PATTERN = /^places\/[\w-]+\/photos\/[\w-]+$/;
  */
 router.get("/photo", async (req, res) => {
   try {
-    const ip =
-      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ??
-      req.socket.remoteAddress ??
-      "unknown";
+    const ip = clientIp(req);
     if (!photoProxyLimiter.consume(ip))
       return res.status(429).json({ error: "Too many photo requests. Try again later." });
 

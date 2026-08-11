@@ -4,6 +4,7 @@ import { Router } from "express";
 //LOCAL FILES
 import { prisma } from "../lib/prisma";
 import { authLimiter, refreshLimiter } from "../lib/rateLimit";
+import { clientIp } from "../lib/clientIp";
 import {
   hashPassword,
   verifyPassword,
@@ -19,15 +20,6 @@ import type { AuthRequest } from "../middleware/auth";
 const router = Router();
 
 //HELPERS
-
-/** Returns client IP, respecting reverse-proxy forwarding headers. */
-function clientIp(req: AuthRequest): string {
-  return (
-    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ??
-    req.socket.remoteAddress ??
-    "unknown"
-  );
-}
 
 /**
  * Persists a new refresh token in the DB (hashed -- a DB leak shouldn't hand

@@ -4,6 +4,7 @@ import { Router } from "express";
 //LOCAL FILES
 import { prisma } from "../lib/prisma";
 import { restaurantLoadLimiter } from "../lib/rateLimit";
+import { clientIp } from "../lib/clientIp";
 import { buildPrefData, fetchMLData, buildMLContext } from "../lib/prefHelpers";
 import { scoreRestaurant } from "../lib/personalization";
 import { requireAuth } from "../middleware/auth";
@@ -65,10 +66,7 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "GOOGLE_API_KEY not configured" });
 
-    const ip =
-      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ??
-      req.socket.remoteAddress ??
-      "unknown";
+    const ip = clientIp(req);
 
     if (!restaurantLoadLimiter.consume(ip))
       return res.status(429).json({ error: "Rate limit: max 10 loads per hour. Try again later." });

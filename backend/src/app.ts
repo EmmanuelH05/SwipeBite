@@ -21,6 +21,13 @@ import onboardingRouter      from "./routes/onboarding";
 // (env validation, process.exit, binding the real PORT).
 export const app = express();
 
+// Trust the first `TRUST_PROXY_HOPS` hops (default 1: a single reverse proxy
+// / load balancer in front of the app) so Express resolves req.ip from
+// X-Forwarded-For correctly. Without this, X-Forwarded-For is entirely
+// client-controlled and every IP-keyed rate limiter is trivially bypassed by
+// sending a fresh value per request.
+app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS ?? 1));
+
 //MIDDLEWARE
 app.use(cors({
   origin: [process.env.FRONTEND_URL ?? "http://localhost:3000"],
