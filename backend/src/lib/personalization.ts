@@ -16,6 +16,7 @@
 import {
   buildWeightedProfile,
   hybridScore,
+  getTimeSlotForHour,
   type SwipeRecord,
   type WeightedProfile,
   type MLScoreBreakdown,
@@ -146,6 +147,12 @@ export function scoreRestaurant(
     weightedProfile,
     cfScore: mlCtx?.cfScore ?? null,
     totalInteractions,
+    timeOfDayLikes: {
+      morning:   prefs.morningLikes,
+      afternoon: prefs.afternoonLikes,
+      evening:   prefs.eveningLikes,
+      lateNight: prefs.lateNightLikes,
+    },
   });
 
   return {
@@ -166,16 +173,13 @@ export function scoreRestaurant(
 // 2. The counters serve as the fallback when raw swipe history isn't loaded
 // 3. The `totalLikes + totalDislikes` count is what gates whether CF turns on
 //
-// The time-of-day bucketing (morning/afternoon/evening/lateNight) is a bonus
-// signal that captures context like "I tend to like coffee shops in the morning."
+// The time-of-day bucketing (morning/afternoon/evening/lateNight) feeds a
+// small bonus in ml-recommender.ts's timeMlScore -- see slotAffinity there
+// for the read side and its caveats (small/bounded, server-local-time only).
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getTimeSlot(): "morning" | "afternoon" | "evening" | "lateNight" {
-  const h = new Date().getHours();
-  if (h >= 6  && h < 11) return "morning";
-  if (h >= 11 && h < 17) return "afternoon";
-  if (h >= 17 && h < 22) return "evening";
-  return "lateNight";
+  return getTimeSlotForHour(new Date().getHours());
 }
 
 export function updatePreferencesOnSwipe(

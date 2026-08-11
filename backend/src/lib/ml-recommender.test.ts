@@ -11,8 +11,10 @@ import {
   priceMlScore,
   hybridScore,
   isVisitExperience,
+  getTimeSlotForHour,
   type SwipeRecord,
   type AllSwipeRecord,
+  type TimeSlot,
 } from "./ml-recommender";
 
 function daysAgo(n: number): Date {
@@ -329,5 +331,53 @@ describe("hybridScore", () => {
     const result = hybridScore({ restaurant, weightedProfile: profile, cfScore: 1, totalInteractions: 1000 });
     expect(result.total).toBeLessThanOrEqual(100);
     expect(result.total).toBeGreaterThanOrEqual(0);
+  });
+
+  test("timeScore gets a small bonus when the user's likes cluster in the current hour's slot", () => {
+    // Hour 19 falls in the "evening" slot (getTimeSlotForHour). A user whose
+    // likes are almost entirely evening likes should score this restaurant's
+    // time fit higher than a user with the same total likes spread evenly.
+    const clustered = hybridScore({
+      restaurant, weightedProfile: emptyProfile, cfScore: null, totalInteractions: 0,
+      currentHour: 19,
+      timeOfDayLikes: { morning: 0, afternoon: 0, evening: 20, lateNight: 0 },
+    });
+    const spread = hybridScore({
+      restaurant, weightedProfile: emptyProfile, cfScore: null, totalInteractions: 0,
+      currentHour: 19,
+      timeOfDayLikes: { morning: 5, afternoon: 5, evening: 5, lateNight: 5 },
+    });
+    const none = hybridScore({
+      restaurant, weightedProfile: emptyProfile, cfScore: null, totalInteractions: 0,
+      currentHour: 19,
+    });
+    expect(clustered.timeScore).toBeGreaterThan(spread.timeScore);
+    expect(spread.timeScore).toBe(none.timeScore);
+  });
+
+  test("the time-of-day bonus is suppressed below the minimum sample size", () => {
+    // Only 3 total likes, all evening -- 100% ratio but too little data to trust.
+    const tooFew = hybridScore({
+      restaurant, weightedProfile: emptyProfile, cfScore: null, totalInteractions: 0,
+      currentHour: 19,
+      timeOfDayLikes: { morning: 0, afternoon: 0, evening: 3, lateNight: 0 },
+    });
+    const none = hybridScore({
+      restaurant, weightedProfile: emptyProfile, cfScore: null, totalInteractions: 0,
+      currentHour: 19,
+    });
+    expect(tooFew.timeScore).toBe(none.timeScore);
+  });
+});
+
+describe("getTimeSlotForHour", () => {
+  test.each([
+    [0, "lateNight"], [5, "lateNight"],
+    [6, "morning"], [10, "morning"],
+    [11, "afternoon"], [16, "afternoon"],
+    [17, "evening"], [21, "evening"],
+    [22, "lateNight"], [23, "lateNight"],
+  ])("hour %i -> %s", (hour, expected) => {
+    expect(getTimeSlotForHour(hour)).toBe(expected as TimeSlot);
   });
 });

@@ -448,6 +448,7 @@ export type MLScoreInput = {
   cfScore: number | null;
   totalInteractions: number;
   currentHour?: number;
+  timeOfDayLikes?: TimeOfDayLikes;
 };
 
 export type MLScoreBreakdown = {
@@ -478,34 +479,86 @@ export function priceMlScore(
   return { score, reason: ratio > 0.4 ? `${priceLevel} fits your budget` : null };
 }
 
+// Bucket boundaries shared between where these counters get written
+// (updatePreferencesOnSwipe's getTimeSlot in personalization.ts) and where
+// they're read (here). Both sides use the server's local hour -- there's no
+// per-user timezone stored anywhere in the schema, so this can't reflect the
+// swiper's actual local time. That's a known, pre-existing limitation of
+// this signal (not something this function can fix on its own); what
+// matters for the bonus below is that writes and reads bucket the *same*
+// way, so a user's own historical pattern stays internally consistent.
+export type TimeSlot = "morning" | "afternoon" | "evening" | "lateNight";
+
+export function getTimeSlotForHour(hour: number): TimeSlot {
+  if (hour >= 6  && hour < 11) return "morning";
+  if (hour >= 11 && hour < 17) return "afternoon";
+  if (hour >= 17 && hour < 22) return "evening";
+  return "lateNight";
+}
+
+export type TimeOfDayLikes = {
+  morning: number;
+  afternoon: number;
+  evening: number;
+  lateNight: number;
+};
+
+// How strongly this user's own LIKE history clusters into the current time
+// slot, as a 0-1 ratio. Returns 0 (no bonus) below MIN_SLOT_SAMPLE total
+// likes across all slots -- with only a couple of data points, which slot
+// "wins" is noise, not signal.
+const MIN_SLOT_SAMPLE = 5;
+
+function slotAffinity(hour: number, likes: TimeOfDayLikes | undefined): number {
+  if (!likes) return 0;
+  const total = likes.morning + likes.afternoon + likes.evening + likes.lateNight;
+  if (total < MIN_SLOT_SAMPLE) return 0;
+  return likes[getTimeSlotForHour(hour)] / total;
+}
+
 function timeMlScore(
   hour: number,
-  openingHours: string | null | undefined
+  openingHours: string | null | undefined,
+  timeOfDayLikes?: TimeOfDayLikes
 ): { score: number; reason: string | null } {
   const h = (openingHours ?? "").toLowerCase();
   const isLateNight =
     h.includes("11:00 pm") || h.includes("12:00 am") ||
     h.includes("1:00 am") || h.includes("2:00 am") || h.includes("24 hours");
 
-  if (hour >= 22 || hour < 6) return isLateNight ? { score: 0.9, reason: "open late night" } : { score: 0.4, reason: null };
-  if (hour >= 17) return { score: 0.7, reason: "great for dinner" };
-  if (hour >= 11) return { score: 0.65, reason: "great for lunch" };
-  return { score: 0.55, reason: null };
+  const base =
+    hour >= 22 || hour < 6 ? (isLateNight ? { score: 0.9, reason: "open late night" } : { score: 0.4, reason: null })
+    : hour >= 17 ? { score: 0.7, reason: "great for dinner" }
+    : hour >= 11 ? { score: 0.65, reason: "great for lunch" }
+    : { score: 0.55, reason: null as string | null };
+
+  // Small, bounded nudge (up to +0.1 on the 0-1 scale) when this user
+  // historically likes restaurants during this same time slot more than
+  // their other slots combined -- "you tend to browse (and like things)
+  // around now." Deliberately small: this is a weak, coarse signal (see the
+  // timezone caveat above), and time itself is only 8-10% of the total
+  // weighted score, so its real impact on ranking stays modest even when it
+  // fires.
+  const affinity = slotAffinity(hour, timeOfDayLikes);
+  if (affinity > 0.4) {
+    return { score: Math.min(1, base.score + 0.1), reason: base.reason ?? "matches when you usually browse" };
+  }
+  return base;
 }
 
 // Signal weights — two sets so we can gracefully handle no-CF case.
-// Time weight is low: the timeMlScore is coarse (hour buckets only) and the
-// per-user time-of-day counters aren't yet fed into this path.
+// Time weight is low: even with the per-user time-of-day nudge above,
+// timeMlScore is a coarse, low-confidence signal relative to cuisine/price.
 const W_CF     = { cuisine: 0.32, price: 0.18, time: 0.08, cf: 0.28, exploration: 0.14 };
 const W_NO_CF  = { cuisine: 0.45, price: 0.22, time: 0.10, exploration: 0.23 };
 
 export function hybridScore(input: MLScoreInput): MLScoreBreakdown {
-  const { restaurant, weightedProfile, cfScore, totalInteractions, currentHour = new Date().getHours() } = input;
+  const { restaurant, weightedProfile, cfScore, totalInteractions, currentHour = new Date().getHours(), timeOfDayLikes } = input;
   const { likedClusters, dislikedClusters, priceCounts } = weightedProfile;
 
   const cuisine     = computeClusterCuisineScore(restaurant.cuisine, likedClusters, dislikedClusters);
   const price       = priceMlScore(restaurant.priceLevel, priceCounts);
-  const time        = timeMlScore(currentHour, restaurant.openingHours);
+  const time        = timeMlScore(currentHour, restaurant.openingHours, timeOfDayLikes);
   const exploration = computeThompsonExploration(restaurant.cuisine, likedClusters, dislikedClusters);
 
   let rawTotal: number;
