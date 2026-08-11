@@ -14,6 +14,7 @@ import matchesRouter         from "./routes/matches";
 import photosRouter          from "./routes/photos";
 import recommendationsRouter from "./routes/recommendations";
 import onboardingRouter      from "./routes/onboarding";
+import { getPreferenceUpdateFailureStats } from "./lib/preferenceStore";
 
 //APP
 // Configured Express app, no listener attached -- lets tests boot this on an
@@ -48,7 +49,11 @@ app.use("/onboarding",      onboardingRouter);
 
 /** GET /health — liveness probe for uptime monitors and load balancers */
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    preferenceUpdateFailures: getPreferenceUpdateFailureStats(),
+  });
 });
 
 //GLOBAL ERROR HANDLER
