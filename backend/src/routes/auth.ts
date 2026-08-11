@@ -139,7 +139,25 @@ router.post("/refresh", async (req: AuthRequest, res) => {
       return res.status(400).json({ error: "refreshToken is required" });
 
     const stored = await findRefreshToken(refreshToken);
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date())
+    if (!stored)
+      return res.status(401).json({ error: "Invalid or expired refresh token" });
+
+    if (stored.revokedAt) {
+      // Reuse of an already-rotated token: either a stolen token replayed
+      // after the legitimate client already rotated past it, or two clients
+      // racing on the same stored token. Either way, this specific token
+      // string should never be presented again -- treat it as theft and
+      // revoke this user's entire refresh-token chain, not just this one row,
+      // so a thief who captured an earlier token in the chain can't keep
+      // rotating forward from it after being caught once.
+      await prisma.refreshToken.updateMany({
+        where: { userId: stored.userId, revokedAt: null },
+        data:  { revokedAt: new Date() },
+      });
+      return res.status(401).json({ error: "Invalid or expired refresh token" });
+    }
+
+    if (stored.expiresAt < new Date())
       return res.status(401).json({ error: "Invalid or expired refresh token" });
 
     // Revoke the old token, then issue a fresh pair

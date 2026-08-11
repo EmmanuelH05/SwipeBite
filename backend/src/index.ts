@@ -30,6 +30,26 @@ const server = app.listen(PORT, () => {
   console.log(`SwipeBite API running at http://localhost:${PORT}`);
 });
 
+//REFRESH TOKEN CLEANUP
+// Every login and every refresh appends a refresh_tokens row that's never
+// deleted -- revoked/expired rows just accumulate forever. No cron
+// infrastructure exists in this project (matches the in-process, single-
+// instance pattern already used for the rate limiters and CF cache), so
+// purge expired rows on a simple interval instead. Targets expiresAt only
+// (not revokedAt): a revoked-but-unexpired row is still meaningful audit
+// history for the reuse-detection check in POST /auth/refresh.
+const REFRESH_TOKEN_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // hourly
+
+async function cleanupExpiredRefreshTokens(): Promise<void> {
+  const { count } = await prisma.refreshToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+  if (count > 0) console.log(`[cleanup] Purged ${count} expired refresh token(s).`);
+}
+
+const cleanupTimer = setInterval(() => {
+  cleanupExpiredRefreshTokens().catch((err) => console.error("[cleanup] Failed to purge expired refresh tokens:", err));
+}, REFRESH_TOKEN_CLEANUP_INTERVAL_MS);
+cleanupTimer.unref(); // don't keep the process alive just for this
+
 //GRACEFUL SHUTDOWN
 // Stop accepting new connections, let in-flight requests finish, then close
 // the DB pool -- avoids leaking Prisma connections on every redeploy/restart.
