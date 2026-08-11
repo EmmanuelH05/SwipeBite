@@ -66,6 +66,15 @@ export type MLContext = {
   cfScore: number | null;
 };
 
+/** Adds `extra`'s counts onto `base`'s, summing values for shared keys. */
+function mergeCounts(base: Record<string, number>, extra: Record<string, number>): Record<string, number> {
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(extra)) {
+    merged[key] = (merged[key] ?? 0) + value;
+  }
+  return merged;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // scoreRestaurant
 //
@@ -73,9 +82,13 @@ export type MLContext = {
 // It coordinates between the legacy preference data and the ML engine.
 //
 // If we have the user's raw swipe history (via mlCtx), we build a proper
-// decay-weighted profile and pass it to the hybrid scorer. If not — like
-// during tests or if something goes wrong — we fall back to the plain integer
-// counters from the DB. Either way the scorer gets something to work with.
+// decay-weighted profile and merge the DB counters into it as a standing
+// prior — onboarding's seeded cuisine picks live in those same counters
+// (PATCH /onboarding/seed calls updatePreferencesOnSwipe), and without this
+// merge they'd vanish from ranking the instant the user's first real swipe
+// gives mlCtx a non-empty history, discarding a deliberate cold-start signal.
+// If we have no swipe history at all — like during tests or if something goes
+// wrong — we fall back to the plain counters alone.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function scoreRestaurant(
@@ -91,7 +104,14 @@ export function scoreRestaurant(
   let weightedProfile: WeightedProfile;
 
   if (mlCtx && mlCtx.userSwipes.length > 0) {
-    weightedProfile = buildWeightedProfile(mlCtx.userSwipes);
+    const decayed = buildWeightedProfile(mlCtx.userSwipes);
+    weightedProfile = {
+      likedClusters:         mergeCounts(decayed.likedClusters, prefs.likedCuisines),
+      dislikedClusters:      mergeCounts(decayed.dislikedClusters, prefs.dislikedCuisines),
+      priceCounts:           mergeCounts(decayed.priceCounts, prefs.priceCounts),
+      totalWeightedLikes:    decayed.totalWeightedLikes,
+      totalWeightedDislikes: decayed.totalWeightedDislikes,
+    };
   } else {
     // Fallback: wrap the DB counters in the WeightedProfile shape
     // This is a lossy approximation — no time decay, no quality signals —

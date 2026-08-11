@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
-import { updatePreferencesOnSwipe, type UserPreferenceData } from "./personalization";
+import { updatePreferencesOnSwipe, scoreRestaurant, type UserPreferenceData, type RestaurantInput } from "./personalization";
+import type { SwipeRecord } from "./ml-recommender";
 
 function empty(): UserPreferenceData {
   return {
@@ -65,5 +66,29 @@ describe("updatePreferencesOnSwipe", () => {
     const originalSnapshot = JSON.parse(JSON.stringify(original));
     updatePreferencesOnSwipe(original, "cafe", "$", "LIKE");
     expect(original).toEqual(originalSnapshot);
+  });
+});
+
+describe("scoreRestaurant", () => {
+  const asianRestaurant: RestaurantInput = { id: "r1", cuisine: "asian", priceLevel: "$$" };
+
+  // A single swipe unrelated to the seeded cuisine -- just enough to give
+  // mlCtx.userSwipes a non-empty history, which is exactly the condition that
+  // used to make scoreRestaurant discard the seeded profile entirely.
+  const oneUnrelatedSwipe: SwipeRecord[] = [
+    { direction: "LIKE", restaurant: { cuisine: "italian", priceLevel: "$$" }, createdAt: new Date() },
+  ];
+
+  test("onboarding-seeded cuisine affinity still influences scoring after the user's first real swipe", () => {
+    const seeded = empty();
+    seeded.likedCuisines = { asian: 10 };
+    seeded.totalLikes = 10;
+
+    const unseeded = empty();
+
+    const seededScore = scoreRestaurant(asianRestaurant, seeded, { userSwipes: oneUnrelatedSwipe, cfScore: null });
+    const unseededScore = scoreRestaurant(asianRestaurant, unseeded, { userSwipes: oneUnrelatedSwipe, cfScore: null });
+
+    expect(seededScore.total).toBeGreaterThan(unseededScore.total);
   });
 });
