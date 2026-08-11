@@ -23,17 +23,31 @@ export function useRestaurantFeed({ userId, setLoading, setError }: UseRestauran
     setLoading(true);
     setError(null);
     apiFetch(`${API_URL}/restaurants`)
-      .then((res) => res.json())
-      .then((data) => { setRestaurants(Array.isArray(data) ? data : []); setLoading(false); })
-      .catch(() => { setError("Failed to load restaurants. Is the backend running?"); setLoading(false); });
+      .then(async (res) => {
+        if (!res.ok) {
+          const body: { error?: string } = await res.json().catch(() => ({}));
+          setError(body.error ?? `Failed to load restaurants (${res.status})`);
+          return;
+        }
+        const data = await res.json();
+        setRestaurants(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setError("Failed to load restaurants. Is the backend running?"))
+      .finally(() => setLoading(false));
   }, [userId, setLoading, setError]);
 
   useEffect(() => {
     if (!userId || view !== "matches") return;
     setLoading(true);
+    setError(null);
     apiFetch(`${API_URL}/matches`)
-      .then((res) => res.json())
-      .then((data: Match[] | Restaurant[]) => {
+      .then(async (res) => {
+        if (!res.ok) {
+          const body: { error?: string } = await res.json().catch(() => ({}));
+          setError(body.error ?? `Failed to load matches (${res.status})`);
+          return;
+        }
+        const data: Match[] | Restaurant[] = await res.json();
         const m = Array.isArray(data) ? data : [];
         setMatches(
           m.map((item) =>
@@ -42,10 +56,10 @@ export function useRestaurantFeed({ userId, setLoading, setError }: UseRestauran
               : { restaurant: item as Restaurant, swipeId: "", visitedAt: null, experience: null, notes: null }
           )
         );
-        setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, [userId, view, setLoading]);
+      .catch(() => setError("Failed to load matches. Is the backend running?"))
+      .finally(() => setLoading(false));
+  }, [userId, view, setLoading, setError]);
 
   const handleSwipe = async (restaurantId: string, direction: "LIKE" | "DISLIKE") => {
     if (!userId) return;
