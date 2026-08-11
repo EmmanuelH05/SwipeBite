@@ -119,6 +119,19 @@ export function temporalDecayWeight(swipeDate: Date): number {
 // hated it. So we want to actively flip that into a dislike signal elsewhere.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// The only values a visit's `experience` may take. Shared with the write
+// boundary in routes/swipes.ts so a typo (e.g. "Great " or "amazing") is
+// rejected with a 400 instead of silently degrading to the neutral 1.0x
+// multiplier below -- "disappointing" in particular is the one value that
+// actively flips a LIKE into a dislike signal, so a silently-dropped typo
+// defeats that signal with no error.
+export const VISIT_EXPERIENCES = ["great", "good", "okay", "disappointing"] as const;
+export type VisitExperience = (typeof VISIT_EXPERIENCES)[number];
+
+export function isVisitExperience(value: string): value is VisitExperience {
+  return (VISIT_EXPERIENCES as readonly string[]).includes(value);
+}
+
 export function visitQualityMultiplier(experience: string | null | undefined): number {
   switch ((experience ?? "").toLowerCase()) {
     case "great":         return 2.5;

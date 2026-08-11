@@ -4,6 +4,7 @@ import { Router } from "express";
 //LOCAL FILES
 import { prisma } from "../lib/prisma";
 import { updatePreferencesOnSwipe } from "../lib/personalization";
+import { VISIT_EXPERIENCES, isVisitExperience, type VisitExperience } from "../lib/ml-recommender";
 import { invalidateCFCache } from "../lib/prefHelpers";
 import { applyPreferenceUpdate } from "../lib/preferenceStore";
 import { requireAuth } from "../middleware/auth";
@@ -82,11 +83,24 @@ router.patch("/:id/visited", requireAuth, async (req: AuthRequest, res) => {
       return res.status(403).json({ error: "Not authorized to update this swipe" });
 
     const { experience, notes } = req.body;
+
+    // Validate against the known set instead of silently dropping anything
+    // unrecognized -- "disappointing" in particular actively flips a LIKE
+    // into a dislike signal (see visitQualityMultiplier), so a typo like
+    // "Great " or "amazing" degrading to a neutral no-op with no error would
+    // silently defeat that signal.
+    let validatedExperience: VisitExperience | undefined;
+    if (experience !== undefined && experience !== null) {
+      const trimmed = typeof experience === "string" ? experience.trim() : "";
+      if (!isVisitExperience(trimmed))
+        return res.status(400).json({ error: `experience must be one of: ${VISIT_EXPERIENCES.join(", ")}` });
+      validatedExperience = trimmed;
+    }
+
     const updateData: { visitedAt: Date; experience?: string; notes?: string | null } = {
       visitedAt: new Date(),
     };
-    if (typeof experience === "string" && experience.trim())
-      updateData.experience = experience.trim();
+    if (validatedExperience) updateData.experience = validatedExperience;
     if (typeof notes === "string") updateData.notes = notes.trim() || null;
 
     const swipe = await prisma.swipe.update({
@@ -99,7 +113,7 @@ router.patch("/:id/visited", requireAuth, async (req: AuthRequest, res) => {
     // Same read-modify-write shape as POST /swipes above, same fix: route it
     // through applyPreferenceUpdate instead of an unserialized fire-and-forget
     // read-then-write.
-    if (experience?.trim() === "disappointing") {
+    if (validatedExperience === "disappointing") {
       const key = swipe.restaurant.cuisine.toLowerCase().replace(/_/g, " ");
       try {
         await applyPreferenceUpdate(swipe.userId, (current) => ({

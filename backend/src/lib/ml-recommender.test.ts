@@ -10,6 +10,7 @@ import {
   computeClusterCuisineScore,
   priceMlScore,
   hybridScore,
+  isVisitExperience,
   type SwipeRecord,
   type AllSwipeRecord,
 } from "./ml-recommender";
@@ -66,6 +67,19 @@ describe("visitQualityMultiplier", () => {
     expect(visitQualityMultiplier(undefined)).toBe(1.0);
     expect(visitQualityMultiplier("something-unrecognized")).toBe(1.0);
   });
+});
+
+describe("isVisitExperience", () => {
+  test.each(["great", "good", "okay", "disappointing"])("%s is valid", (v) => {
+    expect(isVisitExperience(v)).toBe(true);
+  });
+
+  test.each(["amazing", "Great", "great ", "", "disapointing"])(
+    "%j is rejected instead of silently degrading to neutral",
+    (v) => {
+      expect(isVisitExperience(v)).toBe(false);
+    }
+  );
 });
 
 describe("buildWeightedProfile", () => {
