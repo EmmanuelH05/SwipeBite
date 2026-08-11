@@ -17,6 +17,7 @@ import {
   buildWeightedProfile,
   hybridScore,
   getTimeSlotForHour,
+  normalizeCuisine,
   type SwipeRecord,
   type WeightedProfile,
   type MLScoreBreakdown,
@@ -70,17 +71,16 @@ export type MLContext = {
 // Fills in `extra`'s entries only for keys `base` doesn't already have --
 // deliberately NOT a sum. `base` (the decayed swipe profile) and `extra`
 // (the raw DB counters) both derive from the same real swipe history once
-// swipes exist: prefs.priceCounts always shares the "$"/"$$"/"$$$" key space
-// with priceCounts, and prefs.likedCuisines/dislikedCuisines collide with
-// likedClusters/dislikedClusters for any cuisine whose normalizeCuisine()
-// fallback returns it unchanged (e.g. "cafe", "bar" -- ordinary Google Places
-// types with no CUISINE_CLUSTERS entry). Summing those would double-count
-// every such real swipe on top of its own decayed weight, defeating decay
-// entirely for price and silently inflating those cuisines' confidence.
-// Filling only missing keys means a seeded/DB-only prior keeps influencing
-// clusters the user hasn't explored via real swipes yet (the cold-start case
-// this merge exists for), while any key real swipe evidence already covers
-// is left to that evidence alone.
+// swipes exist, and both are keyed by normalizeCuisine()'s cluster ids
+// (updatePreferencesOnSwipe normalizes at write time) -- so every cuisine a
+// user has actually swiped on collides between the two, not just cuisines
+// with no CUISINE_CLUSTERS entry. Summing those would double-count every
+// such real swipe on top of its own decayed weight, defeating decay entirely
+// for price (whose 3 keys always collide) and silently inflating cuisine
+// confidence. Filling only missing keys means a seeded/DB-only prior keeps
+// influencing clusters the user hasn't explored via real swipes yet (the
+// cold-start case this merge exists for), while any key real swipe evidence
+// already covers is left to that evidence alone.
 function mergeCounts(base: Record<string, number>, extra: Record<string, number>): Record<string, number> {
   const merged = { ...base };
   for (const [key, value] of Object.entries(extra)) {
@@ -188,7 +188,19 @@ export function updatePreferencesOnSwipe(
   priceLevel: string,
   direction: "LIKE" | "DISLIKE"
 ): UserPreferenceData {
-  const normalized = cuisine.toLowerCase().replace(/_/g, " ");
+  // Cluster-normalized (not just lowercased/underscore-stripped) so these
+  // counters share one key space with the ML engine's own cluster lookups
+  // (computeClusterCuisineScore, computeThompsonExploration both key off
+  // normalizeCuisine(restaurant.cuisine)). Writing the raw string here used
+  // to mean these counters could only ever match by luck -- onboarding's
+  // seeds happened to write cluster ids that matched, but real swipes never
+  // did, so a matched cuisine like "chinese_restaurant" (cluster "asian")
+  // was stored under "chinese restaurant", a key no reader ever looks up.
+  // That broke scoreRestaurant's no-swipe-history fallback path entirely
+  // (it uses these counters directly as the WeightedProfile, unmerged) and
+  // meant mergeCounts' fill-missing-only merge only ever filled gaps for
+  // cuisines with no cluster match at all.
+  const normalized = normalizeCuisine(cuisine);
   const slot = getTimeSlot();
   const updated = { ...current };
 

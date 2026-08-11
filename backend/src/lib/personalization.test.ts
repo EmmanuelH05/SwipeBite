@@ -21,11 +21,15 @@ function expectedTimeSlot(): "morningLikes" | "afternoonLikes" | "eveningLikes" 
 }
 
 describe("updatePreferencesOnSwipe", () => {
-  test("a LIKE increments totalLikes, the cuisine, and the price bucket", () => {
+  test("a LIKE increments totalLikes, the cuisine's cluster, and the price bucket", () => {
+    // Stored under the cluster id ("italian"), not the raw normalized
+    // string ("italian restaurant") -- this is the fix under test: writers
+    // and readers (computeClusterCuisineScore etc.) need to share one key
+    // space, and readers always look up by cluster id.
     const updated = updatePreferencesOnSwipe(empty(), "italian_restaurant", "$$", "LIKE");
     expect(updated.totalLikes).toBe(1);
     expect(updated.totalDislikes).toBe(0);
-    expect(updated.likedCuisines["italian restaurant"]).toBe(1);
+    expect(updated.likedCuisines["italian"]).toBe(1);
     expect(updated.priceCounts["$$"]).toBe(1);
   });
 
@@ -33,6 +37,7 @@ describe("updatePreferencesOnSwipe", () => {
     const a = updatePreferencesOnSwipe(empty(), "Italian_Restaurant", "$$", "LIKE");
     const b = updatePreferencesOnSwipe(empty(), "italian restaurant", "$$", "LIKE");
     expect(Object.keys(a.likedCuisines)).toEqual(Object.keys(b.likedCuisines));
+    expect(Object.keys(a.likedCuisines)).toEqual(["italian"]);
   });
 
   test("a LIKE buckets into exactly one time-of-day counter", () => {
@@ -42,11 +47,12 @@ describe("updatePreferencesOnSwipe", () => {
     for (const s of slots) expect(updated[s]).toBe(s === slot ? 1 : 0);
   });
 
-  test("a DISLIKE increments totalDislikes and the cuisine, not totalLikes or price", () => {
+  test("a DISLIKE increments totalDislikes and the cuisine's cluster, not totalLikes or price", () => {
+    // "sushi" normalizes to cluster "asian", same as "chinese_restaurant" etc.
     const updated = updatePreferencesOnSwipe(empty(), "sushi", "$$$", "DISLIKE");
     expect(updated.totalDislikes).toBe(1);
     expect(updated.totalLikes).toBe(0);
-    expect(updated.dislikedCuisines["sushi"]).toBe(1);
+    expect(updated.dislikedCuisines["asian"]).toBe(1);
     expect(updated.priceCounts).toEqual({});
   });
 
@@ -57,8 +63,8 @@ describe("updatePreferencesOnSwipe", () => {
     profile = updatePreferencesOnSwipe(profile, "tacos", "$", "DISLIKE");
     expect(profile.totalLikes).toBe(2);
     expect(profile.totalDislikes).toBe(1);
-    expect(profile.likedCuisines["pizza"]).toBe(2);
-    expect(profile.dislikedCuisines["tacos"]).toBe(1);
+    expect(profile.likedCuisines["italian"]).toBe(2); // "pizza" -> cluster "italian"
+    expect(profile.dislikedCuisines["mexican"]).toBe(1); // "tacos" -> cluster "mexican"
   });
 
   test("does not mutate the input profile -- callers rely on this for safe composition", () => {
@@ -114,5 +120,31 @@ describe("scoreRestaurant", () => {
 
     expect(withPrefs.cuisineScore).toBe(withoutPrefs.cuisineScore);
     expect(withPrefs.priceScore).toBe(withoutPrefs.priceScore);
+  });
+
+  test("the no-swipe-history fallback path matches cuisine preferences by cluster, not raw string", () => {
+    // Before updatePreferencesOnSwipe normalized at write time, this
+    // fallback branch (no mlCtx -- prefs used directly as the
+    // WeightedProfile, unmerged) was broken for any matched cuisine: real
+    // swipes wrote a raw string key ("chinese restaurant") that
+    // computeClusterCuisineScore never looks up (it always looks up by
+    // cluster id, via normalizeCuisine(restaurant.cuisine) -- "asian" here).
+    let prefs = empty();
+    prefs = updatePreferencesOnSwipe(prefs, "chinese_restaurant", "$$", "LIKE");
+    prefs = updatePreferencesOnSwipe(prefs, "chinese_restaurant", "$$", "LIKE");
+    prefs = updatePreferencesOnSwipe(prefs, "chinese_restaurant", "$$", "LIKE");
+    prefs = updatePreferencesOnSwipe(prefs, "chinese_restaurant", "$$", "LIKE");
+    prefs = updatePreferencesOnSwipe(prefs, "chinese_restaurant", "$$", "LIKE");
+
+    // Different raw cuisine string, same cluster ("asian") -- proves this
+    // generalizes across the cluster, not just an exact-string match.
+    const japaneseRestaurant: RestaurantInput = { id: "r3", cuisine: "japanese_restaurant", priceLevel: "$$" };
+    const neutralRestaurant: RestaurantInput = { id: "r4", cuisine: "italian_restaurant", priceLevel: "$$" };
+
+    // No mlCtx at all -- exercises the fallback branch directly.
+    const asianScore = scoreRestaurant(japaneseRestaurant, prefs);
+    const italianScore = scoreRestaurant(neutralRestaurant, prefs);
+
+    expect(asianScore.cuisineScore).toBeGreaterThan(italianScore.cuisineScore);
   });
 });
