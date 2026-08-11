@@ -21,7 +21,7 @@ export default function MatchListItem({ match, onVisitClick }: MatchListItemProp
       <div className={styles.info}>
         <p className={styles.name}>{restaurant.name}</p>
         <span className={styles.meta}>
-          {formatCuisine(restaurant.cuisine ?? "Restaurant")} · {restaurant.priceLevel}
+          {formatCuisine(restaurant.cuisine)} · {restaurant.priceLevel}
         </span>
 
         {restaurant.address && (

@@ -125,7 +125,7 @@ const SwipeCard = forwardRef<HTMLDivElement, SwipeCardProps>(function SwipeCard(
           )}
         </div>
         <div className={styles.meta}>
-          <span className={styles.chip}>{formatCuisine(restaurant.cuisine ?? "Restaurant")}</span>
+          <span className={styles.chip}>{formatCuisine(restaurant.cuisine)}</span>
           <span className={styles.priceText}>{restaurant.priceLevel}</span>
           {openStatus.label && (
             <span className={`${styles.openStatus} ${openStatus.open === true ? styles.openYes : openStatus.open === false ? styles.openNo : ""}`}>
