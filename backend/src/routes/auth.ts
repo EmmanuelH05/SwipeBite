@@ -14,6 +14,7 @@ import {
   refreshTokenExpiry,
   hashRefreshToken,
 } from "../lib/auth";
+import { requireAuth } from "../middleware/auth";
 import type { AuthRequest } from "../middleware/auth";
 
 //CONSTANTS
@@ -174,12 +175,10 @@ router.post("/logout", async (req, res) => {
 });
 
 /** GET /auth/me — returns the authenticated user */
-router.get("/me", async (req: AuthRequest, res) => {
+router.get("/me", requireAuth, async (req: AuthRequest, res) => {
   try {
-    if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
-
     const user = await prisma.user.findUnique({
-      where:  { id: req.userId },
+      where:  { id: req.userId! },
       select: { id: true, email: true, name: true, createdAt: true, hasCompletedOnboarding: true },
     });
     if (!user) return res.status(404).json({ error: "User not found" });
@@ -192,11 +191,10 @@ router.get("/me", async (req: AuthRequest, res) => {
 });
 
 /** PATCH /auth/me/onboarding — mark onboarding complete */
-router.patch("/me/onboarding", async (req: AuthRequest, res) => {
+router.patch("/me/onboarding", requireAuth, async (req: AuthRequest, res) => {
   try {
-    if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
     await prisma.user.update({
-      where: { id: req.userId },
+      where: { id: req.userId! },
       data:  { hasCompletedOnboarding: true },
     });
     return res.json({ hasCompletedOnboarding: true });
