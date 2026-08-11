@@ -163,22 +163,24 @@ export default function Home() {
         </section>
       )}
 
-      {visit.visitModal && (
-        <VisitModal
-          match={visit.visitModal}
-          mode={visit.visitModalMode}
-          experience={visit.visitExperience}
-          notes={visit.visitNotes}
-          onExperienceChange={visit.setVisitExperience}
-          onNotesChange={visit.setVisitNotes}
-          onClose={visit.closeVisitModal}
-          onSave={() => {
-            const match = visit.visitModal;
-            if (match) visit.handleMarkVisited(match.swipeId, visit.visitExperience, visit.visitNotes);
-          }}
-          onEdit={() => visit.setVisitModalMode("edit")}
-        />
-      )}
+      <AnimatePresence>
+        {visit.visitModal && (
+          <VisitModal
+            match={visit.visitModal}
+            mode={visit.visitModalMode}
+            experience={visit.visitExperience}
+            notes={visit.visitNotes}
+            onExperienceChange={visit.setVisitExperience}
+            onNotesChange={visit.setVisitNotes}
+            onClose={visit.closeVisitModal}
+            onSave={() => {
+              const match = visit.visitModal;
+              if (match) visit.handleMarkVisited(match.swipeId, visit.visitExperience, visit.visitNotes);
+            }}
+            onEdit={() => visit.setVisitModalMode("edit")}
+          />
+        )}
+      </AnimatePresence>
     </AppShell>
   );
 }
