@@ -203,6 +203,27 @@ describe("computeThompsonExploration", () => {
         .reduce((a, b) => a + b, 0) / N;
     expect(likedAvg).toBeGreaterThan(dislikedAvg);
   });
+
+  test("stays fast and correct for a heavily-engaged user (high alpha/beta)", () => {
+    // A user with ~14 weighted likes and ~14 weighted dislikes in one cluster
+    // used to make the old rejection-sampling betaSample spin for seconds-to-
+    // forever, since its acceptance probability collapses as alpha/beta grow.
+    const start = performance.now();
+    const N = 500;
+    const samples = Array.from({ length: N }, () =>
+      computeThompsonExploration("italian", { italian: 14 }, { italian: 14 })
+    );
+    expect(performance.now() - start).toBeLessThan(200);
+
+    for (const v of samples) {
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(1);
+    }
+    const mean = samples.reduce((a, b) => a + b, 0) / N;
+    // Beta(15, 15) has mean exactly 0.5
+    expect(mean).toBeGreaterThan(0.4);
+    expect(mean).toBeLessThan(0.6);
+  });
 });
 
 describe("computeClusterCuisineScore", () => {

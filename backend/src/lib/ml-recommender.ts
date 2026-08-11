@@ -318,16 +318,43 @@ export function computeCFScore(
 // → high variance → natural exploration. High certainty → narrow distribution
 // → score converges to the true preference.
 //
-// Uses Johnk's method for exact Beta sampling — no external dependencies.
+// Sampled via the Marsaglia-Tsang gamma method (valid for shape >= 1, which
+// always holds here since alpha/beta are counts plus a +1 prior): draw two
+// independent Gamma(shape, 1) variates and take their ratio X/(X+Y), which is
+// distributed as Beta(alpha, beta). O(1) expected iterations (~98% single-pass
+// acceptance) regardless of how large alpha/beta get — unlike rejection
+// methods whose acceptance probability collapses as both parameters grow.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function betaSample(alpha: number, beta: number): number {
-  // Johnk's method: exact for alpha, beta >= 1
+function standardNormalSample(): number {
+  // Box-Muller transform
+  const u1 = Math.random();
+  const u2 = Math.random();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+function gammaSample(shape: number): number {
+  // Marsaglia-Tsang method: exact for shape >= 1
+  const d = shape - 1 / 3;
+  const c = 1 / Math.sqrt(9 * d);
   for (;;) {
-    const x = Math.pow(Math.random(), 1 / alpha);
-    const y = Math.pow(Math.random(), 1 / beta);
-    if (x + y <= 1) return x / (x + y);
+    let x: number;
+    let v: number;
+    do {
+      x = standardNormalSample();
+      v = 1 + c * x;
+    } while (v <= 0);
+    v = v * v * v;
+    const u = Math.random();
+    if (u < 1 - 0.0331 * x * x * x * x) return d * v;
+    if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
   }
+}
+
+function betaSample(alpha: number, beta: number): number {
+  const x = gammaSample(alpha);
+  const y = gammaSample(beta);
+  return x / (x + y);
 }
 
 export function computeThompsonExploration(
