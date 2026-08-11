@@ -4,6 +4,7 @@ import type { UserPreferenceData, MLContext } from "./personalization";
 import {
   buildUserVectors,
   computeCFScore,
+  MIN_SWIPES_FOR_CF,
   type SwipeRecord,
   type AllSwipeRecord,
 } from "./ml-recommender";
@@ -125,7 +126,7 @@ export async function fetchMLData(
 
   // CF vectors come from the module-level cache — O(1) on cache hit, O(3000) on miss.
   // Only fetch when the user has enough swipes to produce meaningful neighbours.
-  const cfVectorsPromise = totalInteractions >= 5
+  const cfVectorsPromise = totalInteractions >= MIN_SWIPES_FOR_CF
     ? getGlobalCFVectors()
     : Promise.resolve(null);
 

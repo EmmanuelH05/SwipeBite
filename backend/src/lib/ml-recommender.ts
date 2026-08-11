@@ -275,7 +275,7 @@ function pearsonSimilarity(a: UserVector, b: UserVector): number {
   return num / Math.sqrt(denA * denB);
 }
 
-const MIN_SWIPES_FOR_CF = 5; // not enough data below this
+export const MIN_SWIPES_FOR_CF = 5; // not enough data below this
 const CF_TOP_K = 15;          // only use the 15 most similar neighbours
 
 export function computeCFScore(

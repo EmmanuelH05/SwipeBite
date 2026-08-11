@@ -5,6 +5,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { buildPrefData, fetchMLData, buildMLContext } from "../lib/prefHelpers";
 import { scoreRestaurant } from "../lib/personalization";
+import { MIN_SWIPES_FOR_CF } from "../lib/ml-recommender";
 import { requireAuth } from "../middleware/auth";
 import type { AuthRequest } from "../middleware/auth";
 
@@ -45,7 +46,7 @@ router.get("/debug", requireAuth, async (req: AuthRequest, res) => {
       meta: {
         userId,
         totalSwipes:    totalInteractions,
-        cfEnabled:      totalInteractions >= 5,
+        cfEnabled:      totalInteractions >= MIN_SWIPES_FOR_CF,
         candidateCount: restaurants.length,
       },
       ranked: scored,
