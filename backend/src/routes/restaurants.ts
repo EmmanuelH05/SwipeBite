@@ -123,22 +123,29 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
       PRICE_LEVEL_EXPENSIVE:   "$$$",
     };
 
-    const upsertArgs = allPlaces.map((p, i) => {
-      const placeId    = p.id ?? p.name ?? `g_${Date.now()}_${i}`;
-      const name       = p.displayName?.text ?? "Restaurant";
-      const cuisine    = p.types?.find((t) => t !== "restaurant" && t !== "food" && t !== "point_of_interest") ?? "Restaurant";
-      const priceLevel = priceMap[p.priceLevel ?? ""] ?? "$$";
-      const address    = p.formattedAddress ?? null;
-      const phone      = p.nationalPhoneNumber ?? null;
-      const photoNames = (p.photos ?? []).map((ph) => ph.name).filter((n): n is string => !!n).slice(0, 6);
-      const openingHours = p.regularOpeningHours?.weekdayDescriptions?.join("\n") ?? null;
+    // A place with neither `id` nor `name` has no stable key to upsert on --
+    // synthesizing one (the old `g_${Date.now()}_${i}` fallback) would mint a
+    // fresh key on every load and permanently duplicate the same place in the
+    // catalog instead of merging into the existing row, defeating the
+    // additive-catalog invariant. Skip it instead.
+    const upsertArgs = allPlaces
+      .filter((p) => p.id ?? p.name)
+      .map((p) => {
+        const placeId    = (p.id ?? p.name) as string;
+        const name       = p.displayName?.text ?? "Restaurant";
+        const cuisine    = p.types?.find((t) => t !== "restaurant" && t !== "food" && t !== "point_of_interest") ?? "Restaurant";
+        const priceLevel = priceMap[p.priceLevel ?? ""] ?? "$$";
+        const address    = p.formattedAddress ?? null;
+        const phone      = p.nationalPhoneNumber ?? null;
+        const photoNames = (p.photos ?? []).map((ph) => ph.name).filter((n): n is string => !!n).slice(0, 6);
+        const openingHours = p.regularOpeningHours?.weekdayDescriptions?.join("\n") ?? null;
 
-      return {
-        where:  { yelpId: placeId },
-        create: { yelpId: placeId, name, cuisine, priceLevel, address, phone, photoNames, openingHours },
-        update: { name, cuisine, priceLevel, address, phone, photoNames, openingHours },
-      };
-    });
+        return {
+          where:  { yelpId: placeId },
+          create: { yelpId: placeId, name, cuisine, priceLevel, address, phone, photoNames, openingHours },
+          update: { name, cuisine, priceLevel, address, phone, photoNames, openingHours },
+        };
+      });
 
     // Batched with bounded concurrency instead of either fully sequential
     // (slow -- up to ~200 awaited round trips, one at a time) or fully
