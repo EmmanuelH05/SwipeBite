@@ -1,6 +1,9 @@
+//THIRD-PARTY LIBRARIES
+import type { Restaurant } from "@prisma/client";
+
 //LOCAL FILES
 import { prisma } from "./prisma";
-import type { UserPreferenceData, MLContext } from "./personalization";
+import { scoreRestaurant, type UserPreferenceData, type MLContext, type ScoreBreakdown } from "./personalization";
 import {
   buildUserVectors,
   computeCFScore,
@@ -152,4 +155,32 @@ export function buildMLContext(
   cfScore: number | null
 ): MLContext {
   return { userSwipes, cfScore };
+}
+
+/**
+ * Runs the full feed-ranking pipeline for a user: loads their unswiped
+ * restaurant candidates and preference snapshot in parallel, builds their ML
+ * context, scores every candidate, and returns them sorted by score
+ * descending. Shared by GET /restaurants and GET /recommendations/debug,
+ * which previously duplicated this exact pipeline and only differed in what
+ * fields of the result they projected into their response.
+ */
+export async function rankUnswipedForUser(userId: string): Promise<{
+  scored: Array<Restaurant & { score: ScoreBreakdown }>;
+  totalInteractions: number;
+}> {
+  const [restaurants, pref] = await Promise.all([
+    prisma.restaurant.findMany({ where: { swipes: { none: { userId } } } }),
+    prisma.userPreference.findUnique({ where: { userId } }),
+  ]);
+
+  const prefData          = buildPrefData(pref);
+  const totalInteractions = prefData.totalLikes + prefData.totalDislikes;
+  const { userSwipes, getCFScore } = await fetchMLData(userId, totalInteractions);
+
+  const scored = restaurants
+    .map((r) => ({ ...r, score: scoreRestaurant(r, prefData, buildMLContext(userSwipes, getCFScore(r.id))) }))
+    .sort((a, b) => b.score.total - a.score.total);
+
+  return { scored, totalInteractions };
 }

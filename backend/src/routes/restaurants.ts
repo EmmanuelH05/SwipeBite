@@ -5,8 +5,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { restaurantLoadLimiter } from "../lib/rateLimit";
 import { clientIp } from "../lib/clientIp";
-import { buildPrefData, fetchMLData, buildMLContext } from "../lib/prefHelpers";
-import { scoreRestaurant } from "../lib/personalization";
+import { rankUnswipedForUser } from "../lib/prefHelpers";
 import { requireAuth } from "../middleware/auth";
 import type { AuthRequest } from "../middleware/auth";
 
@@ -26,24 +25,7 @@ const router = Router();
  */
 router.get("/", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const userId = req.userId!;
-
-    const [restaurants, pref] = await Promise.all([
-      prisma.restaurant.findMany({ where: { swipes: { none: { userId } } } }),
-      prisma.userPreference.findUnique({ where: { userId } }),
-    ]);
-
-    const prefData          = buildPrefData(pref);
-    const totalInteractions = prefData.totalLikes + prefData.totalDislikes;
-    const { userSwipes, getCFScore } = await fetchMLData(userId, totalInteractions);
-
-    const scored = restaurants
-      .map((r) => ({
-        ...r,
-        score: scoreRestaurant(r, prefData, buildMLContext(userSwipes, getCFScore(r.id))),
-      }))
-      .sort((a, b) => b.score.total - a.score.total);
-
+    const { scored } = await rankUnswipedForUser(req.userId!);
     return res.json(scored);
   } catch (err) {
     console.error("GET /restaurants error:", err);
