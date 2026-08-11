@@ -1,6 +1,13 @@
 import { describe, test, expect } from "bun:test";
 import jwt from "jsonwebtoken";
-import { createAccessToken, verifyAccessToken, validatePasswordStrength, hashRefreshToken } from "./auth";
+import {
+  createAccessToken,
+  verifyAccessToken,
+  validatePasswordStrength,
+  hashRefreshToken,
+  hashPassword,
+  verifyPasswordConstantTime,
+} from "./auth";
 
 describe("createAccessToken / verifyAccessToken", () => {
   test("round-trips a valid token", () => {
@@ -74,4 +81,23 @@ describe("validatePasswordStrength", () => {
   test("rejects passwords with no number", () => {
     expect(validatePasswordStrength("Abcdefgh")).not.toBeNull();
   });
+});
+
+describe("verifyPasswordConstantTime", () => {
+  test("returns true for the correct password against a real hash", async () => {
+    const hash = await hashPassword("Correct1Horse");
+    expect(await verifyPasswordConstantTime("Correct1Horse", hash)).toBe(true);
+  });
+
+  test("returns false for the wrong password against a real hash", async () => {
+    const hash = await hashPassword("Correct1Horse");
+    expect(await verifyPasswordConstantTime("WrongPassword1", hash)).toBe(false);
+  });
+
+  test.each([null, undefined])(
+    "returns false (not throws) when hash is %p -- the nonexistent-account case, still runs a real compare",
+    async (hash) => {
+      expect(await verifyPasswordConstantTime("AnyPassword1", hash)).toBe(false);
+    }
+  );
 });

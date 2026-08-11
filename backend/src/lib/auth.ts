@@ -38,9 +38,24 @@ export function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, SALT_ROUNDS);
 }
 
-/** Compares a plain-text password against a stored bcrypt hash. */
-export function verifyPassword(plain: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(plain, hash);
+// Fixed bcrypt hash of an arbitrary string, cost factor 12 (matches
+// SALT_ROUNDS) -- used only so a login attempt against a nonexistent email
+// still runs one bcrypt.compare of the same cost. Never a real password hash.
+const DUMMY_PASSWORD_HASH = "$2b$12$LnUY6MYHhBpqll1uSdAbqOxhgcL91YcQm/2KVVSww23rZlYmwloXS";
+
+/**
+ * Compares a plain-text password against a stored bcrypt hash, always
+ * running one bcrypt.compare of matching cost even when the account doesn't
+ * exist (pass hash = null/undefined) -- compares against DUMMY_PASSWORD_HASH
+ * instead of short-circuiting.
+ *
+ * Without this, "email doesn't exist" (skip the compare entirely, ~1ms) and
+ * "email exists, password wrong" (~250ms bcrypt cost-12 compare) are
+ * trivially distinguishable by response time despite the identical error
+ * message -- defeating the anti-enumeration intent of that shared message.
+ */
+export function verifyPasswordConstantTime(plain: string, hash: string | null | undefined): Promise<boolean> {
+  return bcrypt.compare(plain, hash ?? DUMMY_PASSWORD_HASH);
 }
 
 /**

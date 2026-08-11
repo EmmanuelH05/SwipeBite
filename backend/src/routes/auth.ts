@@ -7,7 +7,7 @@ import { authLimiter, refreshLimiter } from "../lib/rateLimit";
 import { clientIp } from "../lib/clientIp";
 import {
   hashPassword,
-  verifyPassword,
+  verifyPasswordConstantTime,
   validatePasswordStrength,
   createAccessToken,
   generateRefreshToken,
@@ -99,8 +99,13 @@ router.post("/login", async (req: AuthRequest, res) => {
 
     const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
 
-    // Same error message whether email is wrong or password is wrong — prevents email enumeration
-    const ok = user?.passwordHash ? await verifyPassword(password, user.passwordHash) : false;
+    // Same error message whether email is wrong or password is wrong — and
+    // always run a real bcrypt compare (against a dummy hash when the
+    // account doesn't exist) so both cases take the same time. Skipping the
+    // compare entirely for a missing account would make "no such email"
+    // (~1ms) trivially distinguishable from "wrong password" (~250ms) by
+    // response time alone, despite the identical error message.
+    const ok = await verifyPasswordConstantTime(password, user?.passwordHash);
     if (!user || !ok)
       return res.status(401).json({ error: "Invalid email or password" });
 
