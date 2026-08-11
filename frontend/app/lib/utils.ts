@@ -35,6 +35,18 @@ export function getAuthHeaders(): HeadersInit {
   };
 }
 
+// {...init?.headers} silently drops the caller's headers whenever
+// init.headers is a Headers instance or a string[][] tuple list --
+// HeadersInit's other two valid shapes -- since spreading either yields no
+// (or the wrong) enumerable own properties. The Headers constructor already
+// knows how to normalize all three HeadersInit shapes, so build through it
+// instead of object-spreading.
+function mergeHeaders(base: HeadersInit, extra?: HeadersInit): Headers {
+  const merged = new Headers(base);
+  if (extra) new Headers(extra).forEach((value, key) => merged.set(key, value));
+  return merged;
+}
+
 // ─── Auto-refreshing fetch wrapper ───────────────────────────────────────────
 
 // Shared across all concurrent apiFetch() callers so that a burst of 401s
@@ -87,7 +99,7 @@ export async function apiFetch(
   // First attempt
   const res = await fetch(input, {
     ...init,
-    headers: { ...getAuthHeaders(), ...(init?.headers ?? {}) },
+    headers: mergeHeaders(getAuthHeaders(), init?.headers),
   });
 
   if (res.status !== 401) return res;
@@ -107,10 +119,7 @@ export async function apiFetch(
   // Retry the original request with the new access token
   return fetch(input, {
     ...init,
-    headers: {
-      ...getAuthHeaders(),
-      ...(init?.headers ?? {}),
-    },
+    headers: mergeHeaders(getAuthHeaders(), init?.headers),
   });
 }
 
