@@ -100,7 +100,7 @@ export default function Home() {
           />
           <section className={styles.feedSection}>
             {loading && feed.restaurants.length === 0 ? (
-              <div style={{ aspectRatio: "3/4" }}>
+              <div className={styles.cardSkeletonWrapper}>
                 <div className={`${styles.cardSkeleton} skeleton-pulse`} />
               </div>
             ) : feed.restaurants.length === 0 ? (
@@ -114,7 +114,7 @@ export default function Home() {
                 <p className={styles.emptyHint}>Check your saved spots or search a new area</p>
               </div>
             ) : (
-              <div style={{ position: "relative" }}>
+              <div className={styles.cardArea}>
                 <CardStack
                   current={feed.restaurants[0]}
                   next={feed.restaurants[1] ?? null}

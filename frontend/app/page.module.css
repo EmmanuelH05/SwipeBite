@@ -64,12 +64,21 @@
 }
 
 /* Card skeleton */
+.cardSkeletonWrapper {
+  aspect-ratio: 3 / 4;
+}
+
 .cardSkeleton {
   border-radius: var(--radius-lg);
   background: var(--color-surface-elevated);
   overflow: hidden;
   height: 100%;
   aspect-ratio: 3 / 4;
+}
+
+/* Positioning context for the absolutely-positioned MatchReveal overlay */
+.cardArea {
+  position: relative;
 }
 
 /* Empty state */
