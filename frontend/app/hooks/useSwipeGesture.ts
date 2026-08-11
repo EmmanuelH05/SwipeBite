@@ -183,5 +183,6 @@ export function useSwipeGesture(
     handleTouchMove,
     handleTouchEnd,
     handleMouseDown,
+    applySwipeResult,
   };
 }
