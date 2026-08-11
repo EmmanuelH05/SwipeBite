@@ -52,7 +52,10 @@ export const CUISINE_CLUSTERS: Record<string, string[]> = {
     "moroccan", "israeli",
   ],
   seafood: [
-    "seafood", "fish", "seafood_restaurant", "oyster", "sushi",
+    // "sushi" deliberately omitted -- it's listed under "asian" above, and
+    // since normalizeCuisine returns on the first cluster match in insertion
+    // order, a duplicate entry here would be unreachable dead weight.
+    "seafood", "fish", "seafood_restaurant", "oyster",
     "fish and chips",
   ],
   european: [
