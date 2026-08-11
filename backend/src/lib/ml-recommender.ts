@@ -183,14 +183,13 @@ export function buildWeightedProfile(swipes: SwipeRecord[]): WeightedProfile {
     const cluster = normalizeCuisine(swipe.restaurant.cuisine);
 
     if (swipe.direction === "LIKE") {
-      const qualityW = visitQualityMultiplier(swipe.experience);
-
       if (swipe.experience === "disappointing") {
         // User LIKED it but visited and hated it — flip to active dislike signal
         const w = timeW * 1.5;
         dislikedClusters[cluster] = (dislikedClusters[cluster] ?? 0) + w;
         totalWeightedDislikes += w;
       } else {
+        const qualityW = visitQualityMultiplier(swipe.experience);
         const w = timeW * qualityW;
         likedClusters[cluster] = (likedClusters[cluster] ?? 0) + w;
         priceCounts[swipe.restaurant.priceLevel] =
