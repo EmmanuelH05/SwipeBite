@@ -13,6 +13,13 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    // Restricts ambient global type declarations to just Node's (needed for
+    // constants.ts's `process.env` read). Without this, TS auto-loads every
+    // package under node_modules/@types/* as global ambient types -- adding
+    // @types/bun (for bun:test, see tsconfig.test.json) would otherwise leak
+    // Bun/Node-only globals (Bun.env, Bun.file, Node's Timeout shadowing
+    // DOM's number-returning setTimeout) into every browser-bound app file.
+    "types": ["node"],
     "plugins": [
       {
         "name": "next"
@@ -30,5 +37,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "**/*.test.ts"]
 }

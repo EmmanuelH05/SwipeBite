@@ -79,9 +79,12 @@ Full env-var reference and the API map are in [`CLAUDE.md`](./CLAUDE.md).
 cd backend
 bun test           # unit + live-DB integration tests
 npx tsc --noEmit    # typecheck
+
+cd ../frontend
+bun test            # pure-logic unit tests (apiFetch, getOpenStatus, etc.)
 ```
 
-The recommendation engine is pure and deterministic, so its unit tests run without a database (the one stochastic function, Thompson Sampling, is pinned by stubbing `Math.random`). Everything that needs a live database — the auth flow, the swipe and onboarding-seed transactions, restaurant upserts — has its own integration test file (`routes/*.integration.test.ts`) that creates and tears down its own rows, verified to leave zero trace in the database.
+The recommendation engine is pure and deterministic, so its unit tests run without a database (the one stochastic function, Thompson Sampling, is pinned by stubbing `Math.random`). Everything that needs a live database — the auth flow, the swipe and onboarding-seed transactions, restaurant upserts — has its own integration test file (`routes/*.integration.test.ts`) that creates and tears down its own rows, verified to leave zero trace in the database. The frontend's tests cover `app/lib/utils.ts`'s pure logic (notably `apiFetch`'s token-refresh/retry behavior) — components and hooks aren't covered yet, that would need a DOM/React testing setup.
 
 ---
 
