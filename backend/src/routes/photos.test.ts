@@ -35,4 +35,28 @@ describe("GET /places/photo", () => {
     const res = await fetch(`${baseUrl}/places/photo?name=${encodeURIComponent("../../etc/passwd")}`);
     expect(res.status).toBe(400);
   });
+
+  test("redirects to an allowlisted host (the seeded catalog's placeholder images)", async () => {
+    const url = "https://picsum.photos/seed/swipebite-test/640/480";
+    const res = await fetch(`${baseUrl}/places/photo?name=${encodeURIComponent(url)}`, {
+      redirect: "manual",
+    });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(url);
+  });
+
+  test("rejects an http(s) URL on a host that isn't allowlisted (open-redirect guard)", async () => {
+    const res = await fetch(
+      `${baseUrl}/places/photo?name=${encodeURIComponent("https://evil.example.com/phish")}`,
+      { redirect: "manual" }
+    );
+    expect(res.status).toBe(400);
+  });
+
+  test("rejects a malformed http(s) URL", async () => {
+    const res = await fetch(`${baseUrl}/places/photo?name=${encodeURIComponent("https://")}`, {
+      redirect: "manual",
+    });
+    expect(res.status).toBe(400);
+  });
 });

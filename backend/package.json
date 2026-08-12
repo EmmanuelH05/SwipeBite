@@ -5,6 +5,7 @@
   "scripts": {
     "test": "bun test",
     "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "dev": "nodemon --exec tsx src/index.ts",
     "build": "tsc -p tsconfig.build.json",

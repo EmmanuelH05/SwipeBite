@@ -1,0 +1,37 @@
+# Render Blueprint — provisions the SwipeBite Postgres database and Express API.
+# Deploy: Render dashboard → New → Blueprint → point at this repo.
+# The build auto-migrates and seeds the DB, so the app is usable immediately.
+# Required secret: JWT_SECRET. Optional: GOOGLE_API_KEY (only needed to let users
+# load MORE restaurants beyond the seeded catalog — leave blank to skip).
+# Frontend deploys separately on Vercel (root dir: frontend) — see README.
+
+databases:
+  - name: swipebite-db
+    plan: free
+    databaseName: swipebite
+    user: swipebite
+
+services:
+  - type: web
+    name: swipebite-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    # --include=dev: NODE_ENV=production (set below) would otherwise skip the
+    # devDependencies (tsc, tsx) that the build and seed step need.
+    buildCommand: npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build && npx prisma db seed
+    startCommand: npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: swipebite-db
+          property: connectionString
+      - key: JWT_SECRET
+        sync: false          # generate with: openssl rand -hex 32
+      - key: GOOGLE_API_KEY
+        sync: false          # OPTIONAL — Google Places API (New) key; blank is fine
+      - key: FRONTEND_URL
+        sync: false          # your Vercel URL — required, or CORS blocks the browser
+      - key: NODE_ENV
+        value: production
