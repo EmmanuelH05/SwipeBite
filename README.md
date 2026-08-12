@@ -32,7 +32,7 @@ The full scoring pipeline lives in [`backend/src/lib/ml-recommender.ts`](./backe
 | **Auth** | JWT access tokens (15 min) + DB-stored refresh tokens (7-day, rotated on use) |
 | **Recommendations** | Hand-rolled hybrid engine — no ML libraries |
 | **Photos** | Backend proxy keeps the Google Places API key server-side |
-| **Tests / CI** | Vitest · GitHub Actions (typecheck + unit tests + frontend build) |
+| **Tests** | `bun test` — unit coverage for the ML engine, auth, rate limiting, startup checks, plus integration tests against a live database for the register/login/refresh flow, the swipe/preference-update transaction, the onboarding-seed transaction, and restaurant load/upsert |
 
 Monorepo with two independent packages: [`frontend/`](./frontend) and [`backend/`](./backend).
 
@@ -46,6 +46,7 @@ Monorepo with two independent packages: [`frontend/`](./frontend) and [`backend/
 - Pull restaurants by area from Google Places (additive shared catalog — two users loading the same city merge results)
 - Matches list with "mark as visited" + experience rating that feeds back into the model
 - Auth with refresh-token rotation and fail-fast startup checks
+- Demo-mode login link (`?at=<accessToken>&rt=<refreshToken>`) for sharing a live, populated account without handing out real credentials — it only accepts already-valid tokens, so it can't grant access a stolen/guessed token pair couldn't already get
 
 ---
 
@@ -74,15 +75,13 @@ Full env-var reference and the API map are in [`CLAUDE.md`](./CLAUDE.md).
 
 ## Tests
 
-The recommendation engine is pure and deterministic, so it's unit-tested without a database (the one stochastic function, Thompson Sampling, is pinned by stubbing `Math.random`):
-
 ```bash
 cd backend
-npm test          # vitest run
-npm run typecheck # tsc --noEmit
+bun test           # unit + live-DB integration tests
+npx tsc --noEmit    # typecheck
 ```
 
-CI runs the same checks plus a frontend production build on every push and pull request — see [`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
+The recommendation engine is pure and deterministic, so its unit tests run without a database (the one stochastic function, Thompson Sampling, is pinned by stubbing `Math.random`). Everything that needs a live database — the auth flow, the swipe and onboarding-seed transactions, restaurant upserts — has its own integration test file (`routes/*.integration.test.ts`) that creates and tears down its own rows, verified to leave zero trace in the database.
 
 ---
 
@@ -120,7 +119,7 @@ docker compose up --build      # frontend :3000, backend :4000
 
 ```
 backend/
-  prisma/            # schema + 10 migrations
+  prisma/            # schema + migrations + seed script
   src/
     lib/             # ml-recommender (+ tests), personalization, prefHelpers, auth, prisma
     middleware/      # JWT auth guard
@@ -128,9 +127,21 @@ backend/
 frontend/
   app/
     components/      # feed, auth, matches, onboarding, layout, ui (componentized)
+    hooks/           # useAuth, useRestaurantFeed, useSwipeGesture, useVisitModal
     lib/             # types, constants, utils
 CLAUDE.md            # architecture, API map, invariants, ML internals, backlog
 render.yaml          # Render blueprint (Postgres + API)
 ```
 
 See [`CLAUDE.md`](./CLAUDE.md) for the API map, key invariants, and the ML engine deep-dive.
+
+---
+
+## Known limitations
+
+- **In-memory rate limiting and CF cache are single-instance** — multi-instance deployments need Redis for both
+- **Tokens stored in `localStorage`** — XSS-accessible; HttpOnly cookies would be more secure
+- **No pagination** on `GET /restaurants` — relevant once a user's unswiped catalog grows large
+- **`yelpId` column stores Google Place IDs** — naming mismatch from original scaffolding; renaming requires a migration
+- **No swipe undo/rewind** — a mis-swipe is final; would need a new backend endpoint
+- **No cold-start qualifier on the match score** — a new user with 0-4 swipes still sees a numeric score, not a "still learning your taste" indicator

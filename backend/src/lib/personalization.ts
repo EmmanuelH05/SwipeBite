@@ -16,6 +16,8 @@
 import {
   buildWeightedProfile,
   hybridScore,
+  getTimeSlotForHour,
+  normalizeCuisine,
   type SwipeRecord,
   type WeightedProfile,
   type MLScoreBreakdown,
@@ -66,6 +68,27 @@ export type MLContext = {
   cfScore: number | null;
 };
 
+// Fills in `extra`'s entries only for keys `base` doesn't already have --
+// deliberately NOT a sum. `base` (the decayed swipe profile) and `extra`
+// (the raw DB counters) both derive from the same real swipe history once
+// swipes exist, and both are keyed by normalizeCuisine()'s cluster ids
+// (updatePreferencesOnSwipe normalizes at write time) -- so every cuisine a
+// user has actually swiped on collides between the two, not just cuisines
+// with no CUISINE_CLUSTERS entry. Summing those would double-count every
+// such real swipe on top of its own decayed weight, defeating decay entirely
+// for price (whose 3 keys always collide) and silently inflating cuisine
+// confidence. Filling only missing keys means a seeded/DB-only prior keeps
+// influencing clusters the user hasn't explored via real swipes yet (the
+// cold-start case this merge exists for), while any key real swipe evidence
+// already covers is left to that evidence alone.
+function mergeCounts(base: Record<string, number>, extra: Record<string, number>): Record<string, number> {
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(extra)) {
+    if (!(key in merged)) merged[key] = value;
+  }
+  return merged;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // scoreRestaurant
 //
@@ -73,9 +96,16 @@ export type MLContext = {
 // It coordinates between the legacy preference data and the ML engine.
 //
 // If we have the user's raw swipe history (via mlCtx), we build a proper
-// decay-weighted profile and pass it to the hybrid scorer. If not — like
-// during tests or if something goes wrong — we fall back to the plain integer
-// counters from the DB. Either way the scorer gets something to work with.
+// decay-weighted profile and fill in any cluster/price level it has no data
+// for yet from the DB counters — onboarding's seeded cuisine picks live in
+// those same counters (PATCH /onboarding/seed calls updatePreferencesOnSwipe),
+// and without this they'd vanish from ranking the instant the user's first
+// real swipe gives mlCtx a non-empty history, discarding a deliberate
+// cold-start signal. See mergeCounts for why this fills gaps instead of
+// summing: the DB counters and the decayed profile share the same underlying
+// swipe history once swipes exist, so summing would double-count them.
+// If we have no swipe history at all — like during tests or if something goes
+// wrong — we fall back to the plain counters alone.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function scoreRestaurant(
@@ -91,7 +121,14 @@ export function scoreRestaurant(
   let weightedProfile: WeightedProfile;
 
   if (mlCtx && mlCtx.userSwipes.length > 0) {
-    weightedProfile = buildWeightedProfile(mlCtx.userSwipes);
+    const decayed = buildWeightedProfile(mlCtx.userSwipes);
+    weightedProfile = {
+      likedClusters:         mergeCounts(decayed.likedClusters, prefs.likedCuisines),
+      dislikedClusters:      mergeCounts(decayed.dislikedClusters, prefs.dislikedCuisines),
+      priceCounts:           mergeCounts(decayed.priceCounts, prefs.priceCounts),
+      totalWeightedLikes:    decayed.totalWeightedLikes,
+      totalWeightedDislikes: decayed.totalWeightedDislikes,
+    };
   } else {
     // Fallback: wrap the DB counters in the WeightedProfile shape
     // This is a lossy approximation — no time decay, no quality signals —
@@ -110,22 +147,18 @@ export function scoreRestaurant(
     weightedProfile,
     cfScore: mlCtx?.cfScore ?? null,
     totalInteractions,
+    timeOfDayLikes: {
+      morning:   prefs.morningLikes,
+      afternoon: prefs.afternoonLikes,
+      evening:   prefs.eveningLikes,
+      lateNight: prefs.lateNightLikes,
+    },
   });
 
   return {
     ...ml,
     noveltyBonus: ml.explorationScore, // keep the old field name for the frontend
   };
-}
-
-export function sortByScore(
-  restaurants: RestaurantInput[],
-  prefs: UserPreferenceData,
-  mlCtx?: MLContext
-): Array<RestaurantInput & { score: ScoreBreakdown }> {
-  return restaurants
-    .map((r) => ({ ...r, score: scoreRestaurant(r, prefs, mlCtx) }))
-    .sort((a, b) => b.score.total - a.score.total);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -140,16 +173,13 @@ export function sortByScore(
 // 2. The counters serve as the fallback when raw swipe history isn't loaded
 // 3. The `totalLikes + totalDislikes` count is what gates whether CF turns on
 //
-// The time-of-day bucketing (morning/afternoon/evening/lateNight) is a bonus
-// signal that captures context like "I tend to like coffee shops in the morning."
+// The time-of-day bucketing (morning/afternoon/evening/lateNight) feeds a
+// small bonus in ml-recommender.ts's timeMlScore -- see slotAffinity there
+// for the read side and its caveats (small/bounded, server-local-time only).
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getTimeSlot(): "morning" | "afternoon" | "evening" | "lateNight" {
-  const h = new Date().getHours();
-  if (h >= 6  && h < 11) return "morning";
-  if (h >= 11 && h < 17) return "afternoon";
-  if (h >= 17 && h < 22) return "evening";
-  return "lateNight";
+  return getTimeSlotForHour(new Date().getHours());
 }
 
 export function updatePreferencesOnSwipe(
@@ -158,7 +188,19 @@ export function updatePreferencesOnSwipe(
   priceLevel: string,
   direction: "LIKE" | "DISLIKE"
 ): UserPreferenceData {
-  const normalized = cuisine.toLowerCase().replace(/_/g, " ");
+  // Cluster-normalized (not just lowercased/underscore-stripped) so these
+  // counters share one key space with the ML engine's own cluster lookups
+  // (computeClusterCuisineScore, computeThompsonExploration both key off
+  // normalizeCuisine(restaurant.cuisine)). Writing the raw string here used
+  // to mean these counters could only ever match by luck -- onboarding's
+  // seeds happened to write cluster ids that matched, but real swipes never
+  // did, so a matched cuisine like "chinese_restaurant" (cluster "asian")
+  // was stored under "chinese restaurant", a key no reader ever looks up.
+  // That broke scoreRestaurant's no-swipe-history fallback path entirely
+  // (it uses these counters directly as the WeightedProfile, unmerged) and
+  // meant mergeCounts' fill-missing-only merge only ever filled gaps for
+  // cuisines with no cluster match at all.
+  const normalized = normalizeCuisine(cuisine);
   const slot = getTimeSlot();
   const updated = { ...current };
 

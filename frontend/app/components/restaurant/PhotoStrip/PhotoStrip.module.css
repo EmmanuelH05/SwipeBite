@@ -3,8 +3,8 @@
   height: 3.25rem;
   flex-shrink: 0;
   overflow: hidden;
-  border-radius: 0.75rem;
-  border: 1px solid #2c2420;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
 }
 
 .img {
@@ -20,8 +20,8 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: 0.75rem;
-  background: #201a16;
-  border: 1px solid #2c2420;
-  color: #3c3228;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
 }

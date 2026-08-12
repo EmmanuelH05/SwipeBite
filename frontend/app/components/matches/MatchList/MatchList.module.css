@@ -19,9 +19,9 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  border-radius: 1rem;
-  border: 1px solid #1c1612;
-  background: #161210;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-card);
   padding: 0.75rem;
 }
 
@@ -29,7 +29,7 @@
   width: 3.25rem;
   height: 3.25rem;
   flex-shrink: 0;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-sm);
 }
 
 .skeletonText {
@@ -42,19 +42,19 @@
 .skeletonLine1 {
   height: 0.875rem;
   width: 7rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-sm);
 }
 
 .skeletonLine2 {
   height: 0.75rem;
   width: 10rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-sm);
 }
 
 .skeletonBtn {
   height: 1.75rem;
   width: 5rem;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-sm);
 }
 
 /* Empty state */
@@ -73,22 +73,23 @@
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: #161210;
-  border: 1px solid #2c2420;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
   margin-bottom: 1rem;
-  color: #3c3228;
+  color: var(--color-text-muted);
 }
 
 .emptyTitle {
   font-size: 0.875rem;
-  font-weight: 500;
-  color: #5c504a;
+  font-weight: 600;
+  color: var(--color-text-muted);
   margin: 0;
 }
 
 .emptyHint {
   margin-top: 0.25rem;
   font-size: 0.75rem;
-  color: #3c3228;
+  color: var(--color-text-muted);
+  opacity: 0.75;
   margin: 0.25rem 0 0;
 }

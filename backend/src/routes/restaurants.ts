@@ -3,9 +3,10 @@ import { Router } from "express";
 
 //LOCAL FILES
 import { prisma } from "../lib/prisma";
-import { checkRateLimit, recordRequest } from "../lib/rateLimit";
-import { buildPrefData, fetchMLData, buildMLContext } from "../lib/prefHelpers";
-import { scoreRestaurant } from "../lib/personalization";
+import { restaurantLoadLimiter } from "../lib/rateLimit";
+import { clientIp } from "../lib/clientIp";
+import { rankUnswipedForUser } from "../lib/prefHelpers";
+import type { PriceLevel } from "../lib/ml-recommender";
 import { requireAuth } from "../middleware/auth";
 import type { AuthRequest } from "../middleware/auth";
 
@@ -25,24 +26,7 @@ const router = Router();
  */
 router.get("/", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const userId = req.userId!;
-
-    const [restaurants, pref] = await Promise.all([
-      prisma.restaurant.findMany({ where: { swipes: { none: { userId } } } }),
-      prisma.userPreference.findUnique({ where: { userId } }),
-    ]);
-
-    const prefData          = buildPrefData(pref);
-    const totalInteractions = prefData.totalLikes + prefData.totalDislikes;
-    const { userSwipes, getCFScore } = await fetchMLData(userId, totalInteractions);
-
-    const scored = restaurants
-      .map((r) => ({
-        ...r,
-        score: scoreRestaurant(r, prefData, buildMLContext(userSwipes, getCFScore(r.id))),
-      }))
-      .sort((a, b) => b.score.total - a.score.total);
-
+    const { scored } = await rankUnswipedForUser(req.userId!);
     return res.json(scored);
   } catch (err) {
     console.error("GET /restaurants error:", err);
@@ -65,12 +49,9 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "GOOGLE_API_KEY not configured" });
 
-    const ip =
-      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ??
-      req.socket.remoteAddress ??
-      "unknown";
+    const ip = clientIp(req);
 
-    if (!checkRateLimit(ip))
+    if (!restaurantLoadLimiter.consume(ip))
       return res.status(429).json({ error: "Rate limit: max 10 loads per hour. Try again later." });
 
     const { location } = req.body;
@@ -96,6 +77,7 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
 
     const allPlaces: Place[] = [];
     let pageToken: string | undefined;
+    let partial = false;
 
     for (let page = 0; page < 10; page++) {
       const body: {
@@ -106,6 +88,9 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
       } = { textQuery: `restaurants in ${location.trim()}`, includedType: "restaurant", pageSize: 20 };
       if (pageToken) body.pageToken = pageToken;
 
+      // Without a timeout, a hung upstream pins this request (and the
+      // waiting client) indefinitely -- up to 10 sequential un-aborted round
+      // trips in the worst case.
       const resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
         method: "POST",
         headers: {
@@ -114,12 +99,17 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
           "X-Goog-FieldMask": fieldMask,
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10_000),
       });
 
       if (!resp.ok) {
         const errText = await resp.text();
         console.error("Google Places API error:", resp.status, errText);
         if (page === 0) return res.status(502).json({ error: "Google Places API request failed" });
+        // A later page failed (e.g. transient 503/429) -- stop paginating,
+        // but don't report this as a clean success: the caller has no other
+        // way to know results are incomplete vs. genuinely exhausted.
+        partial = true;
         break;
       }
 
@@ -132,33 +122,58 @@ router.post("/load", requireAuth, async (req: AuthRequest, res) => {
       await new Promise((r) => setTimeout(r, 200));
     }
 
-    const priceMap: Record<string, string> = {
-      PRICE_LEVEL_INEXPENSIVE: "$",
-      PRICE_LEVEL_MODERATE:    "$$",
-      PRICE_LEVEL_EXPENSIVE:   "$$$",
+    // Google's price enum also has PRICE_LEVEL_VERY_EXPENSIVE, which this
+    // app's 3-tier model has no distinct slot for -- it used to fall through
+    // to the unmapped-value default below ("$$", moderate), silently
+    // miscategorizing very-expensive restaurants as mid-range. Map it to the
+    // closest available tier ("$$$") instead of leaving it unmapped.
+    const priceMap: Record<string, PriceLevel> = {
+      PRICE_LEVEL_INEXPENSIVE:   "$",
+      PRICE_LEVEL_MODERATE:      "$$",
+      PRICE_LEVEL_EXPENSIVE:     "$$$",
+      PRICE_LEVEL_VERY_EXPENSIVE: "$$$",
     };
 
-    let created = 0;
-    for (const p of allPlaces) {
-      const placeId    = p.id ?? p.name ?? `g_${Date.now()}_${created}`;
-      const name       = p.displayName?.text ?? "Restaurant";
-      const cuisine    = p.types?.find((t) => t !== "restaurant" && t !== "food" && t !== "point_of_interest") ?? "Restaurant";
-      const priceLevel = priceMap[p.priceLevel ?? ""] ?? "$$";
-      const address    = p.formattedAddress ?? null;
-      const phone      = p.nationalPhoneNumber ?? null;
-      const photoNames = (p.photos ?? []).map((ph) => ph.name).filter((n): n is string => !!n).slice(0, 6);
-      const openingHours = p.regularOpeningHours?.weekdayDescriptions?.join("\n") ?? null;
+    // A place with neither `id` nor `name` has no stable key to upsert on --
+    // synthesizing one (the old `g_${Date.now()}_${i}` fallback) would mint a
+    // fresh key on every load and permanently duplicate the same place in the
+    // catalog instead of merging into the existing row, defeating the
+    // additive-catalog invariant. Skip it instead.
+    const upsertArgs = allPlaces
+      .filter((p) => p.id ?? p.name)
+      .map((p) => {
+        const placeId    = (p.id ?? p.name) as string;
+        const name       = p.displayName?.text ?? "Restaurant";
+        const cuisine    = p.types?.find((t) => t !== "restaurant" && t !== "food" && t !== "point_of_interest") ?? "Restaurant";
+        const priceLevel = priceMap[p.priceLevel ?? ""] ?? "$$";
+        const address    = p.formattedAddress ?? null;
+        const phone      = p.nationalPhoneNumber ?? null;
+        const photoNames = (p.photos ?? []).map((ph) => ph.name).filter((n): n is string => !!n).slice(0, 6);
+        const openingHours = p.regularOpeningHours?.weekdayDescriptions?.join("\n") ?? null;
 
-      await prisma.restaurant.upsert({
-        where:  { yelpId: placeId },
-        create: { yelpId: placeId, name, cuisine, priceLevel, address, phone, photoNames, openingHours },
-        update: { name, cuisine, priceLevel, address, phone, photoNames, openingHours },
+        return {
+          where:  { yelpId: placeId },
+          create: { yelpId: placeId, name, cuisine, priceLevel, address, phone, photoNames, openingHours },
+          update: { name, cuisine, priceLevel, address, phone, photoNames, openingHours },
+        };
       });
-      created++;
+
+    // Batched with bounded concurrency instead of either fully sequential
+    // (slow -- up to ~200 awaited round trips, one at a time) or fully
+    // parallel (risks exhausting the Prisma connection pool on a large load).
+    const UPSERT_BATCH_SIZE = 20;
+    let upserted = 0;
+    for (let i = 0; i < upsertArgs.length; i += UPSERT_BATCH_SIZE) {
+      const batch = upsertArgs.slice(i, i + UPSERT_BATCH_SIZE);
+      await Promise.all(batch.map((args) => prisma.restaurant.upsert(args)));
+      upserted += batch.length;
     }
 
-    recordRequest(ip);
-    return res.json({ loaded: created, location: location.trim() });
+    return res.json({
+      loaded: upserted,
+      location: location.trim(),
+      ...(partial ? { partial: true } : {}),
+    });
   } catch (err) {
     console.error("POST /restaurants/load error:", err);
     return res.status(500).json({ error: "Failed to load restaurants" });

@@ -1,9 +1,13 @@
+//THIRD-PARTY LIBRARIES
+import type { Restaurant } from "@prisma/client";
+
 //LOCAL FILES
 import { prisma } from "./prisma";
-import type { UserPreferenceData, MLContext } from "./personalization";
+import { scoreRestaurant, type UserPreferenceData, type MLContext, type ScoreBreakdown } from "./personalization";
 import {
   buildUserVectors,
   computeCFScore,
+  MIN_SWIPES_FOR_CF,
   type SwipeRecord,
   type AllSwipeRecord,
 } from "./ml-recommender";
@@ -35,7 +39,7 @@ async function getGlobalCFVectors(): Promise<ReturnType<typeof buildUserVectors>
   const records: AllSwipeRecord[] = raw.map((s) => ({
     userId:       s.userId,
     restaurantId: s.restaurantId,
-    direction:    s.direction as "LIKE" | "DISLIKE",
+    direction:    s.direction,
   }));
   const vectors = buildUserVectors(records);
   cfVectorCache = { vectors, builtAt: Date.now() };
@@ -62,13 +66,25 @@ type RawPref = {
 
 //HELPERS
 
+// Every current write path produces a well-formed plain object in these Json
+// columns, but nothing in the type system enforces that -- a future
+// migration, admin script, or manual DB edit that leaves a JSON array,
+// string, or null in one of these columns would otherwise flow straight into
+// the scoring engine's arithmetic (likedClusters[cluster] ?? 0) as `unknown`
+// cast directly to a numeric map. Degrade to "no data" instead.
+function asCountMap(value: unknown): Record<string, number> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, number>)
+    : {};
+}
+
 /** Shapes a Prisma UserPreference row into the typed object the scorer expects. */
 export function buildPrefData(pref: RawPref): UserPreferenceData {
   if (!pref) return emptyPrefData();
   return {
-    likedCuisines:    pref.likedCuisines    as Record<string, number>,
-    dislikedCuisines: pref.dislikedCuisines as Record<string, number>,
-    priceCounts:      pref.priceCounts       as Record<string, number>,
+    likedCuisines:    asCountMap(pref.likedCuisines),
+    dislikedCuisines: asCountMap(pref.dislikedCuisines),
+    priceCounts:      asCountMap(pref.priceCounts),
     totalLikes:       pref.totalLikes,
     totalDislikes:    pref.totalDislikes,
     morningLikes:     pref.morningLikes,
@@ -99,22 +115,28 @@ export async function fetchMLData(
   userSwipes:  SwipeRecord[];
   getCFScore:  (restaurantId: string) => number | null;
 }> {
+  // Bounded like the global CF query below -- decay makes swipes past this
+  // near-worthless to the scorer anyway (temporalDecayWeight's half-life is
+  // measured in days, not hundreds of interactions), so this trades a
+  // negligible amount of long-tail signal for a hard cap on how much a
+  // heavy user's history costs to load on every feed request.
   const userSwipesPromise = prisma.swipe.findMany({
     where:   { userId },
     include: { restaurant: { select: { cuisine: true, priceLevel: true } } },
     orderBy: { createdAt: "desc" },
+    take:    500,
   });
 
   // CF vectors come from the module-level cache — O(1) on cache hit, O(3000) on miss.
   // Only fetch when the user has enough swipes to produce meaningful neighbours.
-  const cfVectorsPromise = totalInteractions >= 5
+  const cfVectorsPromise = totalInteractions >= MIN_SWIPES_FOR_CF
     ? getGlobalCFVectors()
     : Promise.resolve(null);
 
   const [userSwipesRaw, cfVectors] = await Promise.all([userSwipesPromise, cfVectorsPromise]);
 
   const userSwipes: SwipeRecord[] = userSwipesRaw.map((s) => ({
-    direction:  s.direction as "LIKE" | "DISLIKE",
+    direction:  s.direction,
     restaurant: { cuisine: s.restaurant.cuisine, priceLevel: s.restaurant.priceLevel },
     experience: s.experience,
     createdAt:  s.createdAt,
@@ -133,4 +155,32 @@ export function buildMLContext(
   cfScore: number | null
 ): MLContext {
   return { userSwipes, cfScore };
+}
+
+/**
+ * Runs the full feed-ranking pipeline for a user: loads their unswiped
+ * restaurant candidates and preference snapshot in parallel, builds their ML
+ * context, scores every candidate, and returns them sorted by score
+ * descending. Shared by GET /restaurants and GET /recommendations/debug,
+ * which previously duplicated this exact pipeline and only differed in what
+ * fields of the result they projected into their response.
+ */
+export async function rankUnswipedForUser(userId: string): Promise<{
+  scored: Array<Restaurant & { score: ScoreBreakdown }>;
+  totalInteractions: number;
+}> {
+  const [restaurants, pref] = await Promise.all([
+    prisma.restaurant.findMany({ where: { swipes: { none: { userId } } } }),
+    prisma.userPreference.findUnique({ where: { userId } }),
+  ]);
+
+  const prefData          = buildPrefData(pref);
+  const totalInteractions = prefData.totalLikes + prefData.totalDislikes;
+  const { userSwipes, getCFScore } = await fetchMLData(userId, totalInteractions);
+
+  const scored = restaurants
+    .map((r) => ({ ...r, score: scoreRestaurant(r, prefData, buildMLContext(userSwipes, getCFScore(r.id))) }))
+    .sort((a, b) => b.score.total - a.score.total);
+
+  return { scored, totalInteractions };
 }

@@ -3,8 +3,10 @@ import { Router } from "express";
 
 //LOCAL FILES
 import { prisma } from "../lib/prisma";
-import { updatePreferencesOnSwipe, type UserPreferenceData } from "../lib/personalization";
+import { updatePreferencesOnSwipe } from "../lib/personalization";
+import { VISIT_EXPERIENCES, isVisitExperience, type VisitExperience } from "../lib/ml-recommender";
 import { invalidateCFCache } from "../lib/prefHelpers";
+import { applyPreferenceUpdate } from "../lib/preferenceStore";
 import { requireAuth } from "../middleware/auth";
 import type { AuthRequest } from "../middleware/auth";
 
@@ -14,7 +16,7 @@ const router = Router();
 //ROUTES
 
 /**
- * POST /swipes — record a LIKE or DISLIKE, then async-update the preference profile.
+ * POST /swipes — record a LIKE or DISLIKE, then update the preference profile.
  * Requires authentication. The userId comes from the token — not the request body.
  * Body: { restaurantId: string, direction: "LIKE" | "DISLIKE" }
  */
@@ -36,45 +38,21 @@ router.post("/", requireAuth, async (req: AuthRequest, res) => {
     // Invalidate CF vector cache so the next feed request reflects this swipe
     invalidateCFCache();
 
-    //ASYNC PREFERENCE UPDATE
-    // Fire-and-forget — doesn't block the response
-    void (async () => {
-      try {
-        const existing = await prisma.userPreference.findUnique({ where: { userId } });
-        const current: UserPreferenceData = existing
-          ? {
-              likedCuisines:    existing.likedCuisines    as Record<string, number>,
-              dislikedCuisines: existing.dislikedCuisines as Record<string, number>,
-              priceCounts:      existing.priceCounts       as Record<string, number>,
-              totalLikes:       existing.totalLikes,
-              totalDislikes:    existing.totalDislikes,
-              morningLikes:     existing.morningLikes,
-              afternoonLikes:   existing.afternoonLikes,
-              eveningLikes:     existing.eveningLikes,
-              lateNightLikes:   existing.lateNightLikes,
-            }
-          : {
-              likedCuisines: {}, dislikedCuisines: {}, priceCounts: {},
-              totalLikes: 0, totalDislikes: 0,
-              morningLikes: 0, afternoonLikes: 0, eveningLikes: 0, lateNightLikes: 0,
-            };
-
-        const updated = updatePreferencesOnSwipe(
-          current,
-          restaurant.cuisine,
-          restaurant.priceLevel,
-          direction as "LIKE" | "DISLIKE"
-        );
-
-        await prisma.userPreference.upsert({
-          where:  { userId },
-          create: { userId, ...updated },
-          update: updated,
-        });
-      } catch (e) {
-        console.error("Preference update failed (non-critical):", e);
-      }
-    })();
+    // Awaited (not fire-and-forget) so a failure here is visible instead of a
+    // silently-logged background error, and so the read-modify-write below is
+    // safely serialized per user via applyPreferenceUpdate's advisory lock --
+    // two swipes fired close together (the normal way this app gets used) no
+    // longer race on the same stale counters. Still its own try/catch: the
+    // swipe itself is the source of truth and already recorded above: these
+    // counters are a derived, self-healing aggregate, so a rare failure here
+    // shouldn't fail a swipe that already succeeded.
+    try {
+      await applyPreferenceUpdate(userId, (current) =>
+        updatePreferencesOnSwipe(current, restaurant.cuisine, restaurant.priceLevel, direction)
+      );
+    } catch (e) {
+      console.error("Preference update failed (non-critical):", e);
+    }
 
     return res.status(201).json(swipe);
   } catch (err: unknown) {
@@ -105,11 +83,24 @@ router.patch("/:id/visited", requireAuth, async (req: AuthRequest, res) => {
       return res.status(403).json({ error: "Not authorized to update this swipe" });
 
     const { experience, notes } = req.body;
+
+    // Validate against the known set instead of silently dropping anything
+    // unrecognized -- "disappointing" in particular actively flips a LIKE
+    // into a dislike signal (see visitQualityMultiplier), so a typo like
+    // "Great " or "amazing" degrading to a neutral no-op with no error would
+    // silently defeat that signal.
+    let validatedExperience: VisitExperience | undefined;
+    if (experience !== undefined && experience !== null) {
+      const trimmed = typeof experience === "string" ? experience.trim() : "";
+      if (!isVisitExperience(trimmed))
+        return res.status(400).json({ error: `experience must be one of: ${VISIT_EXPERIENCES.join(", ")}` });
+      validatedExperience = trimmed;
+    }
+
     const updateData: { visitedAt: Date; experience?: string; notes?: string | null } = {
       visitedAt: new Date(),
     };
-    if (typeof experience === "string" && experience.trim())
-      updateData.experience = experience.trim();
+    if (validatedExperience) updateData.experience = validatedExperience;
     if (typeof notes === "string") updateData.notes = notes.trim() || null;
 
     const swipe = await prisma.swipe.update({
@@ -118,22 +109,19 @@ router.patch("/:id/visited", requireAuth, async (req: AuthRequest, res) => {
       include: { restaurant: true },
     });
 
-    // When the visit was disappointing, immediately bump the dislike counter
-    const swipeUserId       = swipe.userId;
-    const swipeCuisine      = swipe.restaurant.cuisine;
-    if (experience?.trim() === "disappointing") {
-      void (async () => {
-        try {
-          const pref = await prisma.userPreference.findUnique({ where: { userId: swipeUserId } });
-          if (!pref) return;
-          const disliked = { ...(pref.dislikedCuisines as Record<string, number>) };
-          const key      = swipeCuisine.toLowerCase().replace(/_/g, " ");
-          disliked[key]  = (disliked[key] ?? 0) + 1;
-          await prisma.userPreference.update({ where: { userId: swipeUserId }, data: { dislikedCuisines: disliked } });
-        } catch (e) {
-          console.error("Visit quality preference update failed:", e);
-        }
-      })();
+    // When the visit was disappointing, route it through updatePreferencesOnSwipe
+    // as a DISLIKE -- same as every other preference mutation path -- so
+    // totalDislikes (the counter that gates CF eligibility elsewhere) stays in
+    // sync with dislikedCuisines instead of drifting out of lockstep. Previously
+    // this hand-built the update and only touched dislikedCuisines.
+    if (validatedExperience === "disappointing") {
+      try {
+        await applyPreferenceUpdate(swipe.userId, (current) =>
+          updatePreferencesOnSwipe(current, swipe.restaurant.cuisine, swipe.restaurant.priceLevel, "DISLIKE")
+        );
+      } catch (e) {
+        console.error("Visit quality preference update failed:", e);
+      }
     }
 
     return res.json(swipe);

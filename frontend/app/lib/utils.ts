@@ -4,12 +4,14 @@ import { API_URL, TOKEN_KEY, REFRESH_TOKEN_KEY } from "./constants";
 
 /** Persists both tokens after a successful login or register. */
 export function setTokens(accessToken: string, refreshToken: string): void {
+  if (typeof window === "undefined") return;
   localStorage.setItem(TOKEN_KEY, accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 }
 
 /** Removes both tokens (used on logout or when refresh fails). */
 export function clearTokens(): void {
+  if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
@@ -35,7 +37,54 @@ export function getAuthHeaders(): HeadersInit {
   };
 }
 
+// {...init?.headers} silently drops the caller's headers whenever
+// init.headers is a Headers instance or a string[][] tuple list --
+// HeadersInit's other two valid shapes -- since spreading either yields no
+// (or the wrong) enumerable own properties. The Headers constructor already
+// knows how to normalize all three HeadersInit shapes, so build through it
+// instead of object-spreading.
+function mergeHeaders(base: HeadersInit, extra?: HeadersInit): Headers {
+  const merged = new Headers(base);
+  if (extra) new Headers(extra).forEach((value, key) => merged.set(key, value));
+  return merged;
+}
+
 // ─── Auto-refreshing fetch wrapper ───────────────────────────────────────────
+
+// Shared across all concurrent apiFetch() callers so that a burst of 401s
+// (e.g. several feed requests firing around the same expiry) triggers exactly
+// one POST /auth/refresh. Refresh tokens rotate on use (backend invariant),
+// so a second, independent refresh call would be rejected by the server and
+// clear the valid token pair the first call just stored, logging the user
+// out mid-session. Every concurrent caller instead awaits this single
+// in-flight refresh and shares its result.
+let refreshPromise: Promise<boolean> | null = null;
+
+function refreshTokens(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) return false;
+
+      const refreshRes = await fetch(`${API_URL}/auth/refresh`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ refreshToken }),
+      });
+      if (!refreshRes.ok) return false;
+
+      const { accessToken, refreshToken: newRefreshToken } = await refreshRes.json() as {
+        accessToken: string;
+        refreshToken: string;
+      };
+      setTokens(accessToken, newRefreshToken);
+      return true;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
 
 /**
  * Drop-in replacement for fetch() that transparently handles access token expiry.
@@ -52,42 +101,27 @@ export async function apiFetch(
   // First attempt
   const res = await fetch(input, {
     ...init,
-    headers: { ...getAuthHeaders(), ...(init?.headers ?? {}) },
+    headers: mergeHeaders(getAuthHeaders(), init?.headers),
   });
 
   if (res.status !== 401) return res;
 
   // 401 — try to silently refresh the access token
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) {
+  if (!getRefreshToken()) {
     clearTokens();
     return res; // caller handles 401
   }
 
-  const refreshRes = await fetch(`${API_URL}/auth/refresh`, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ refreshToken }),
-  });
-
-  if (!refreshRes.ok) {
+  const refreshed = await refreshTokens();
+  if (!refreshed) {
     clearTokens(); // refresh token invalid or expired — force re-login
     return res;
   }
 
-  const { accessToken, refreshToken: newRefreshToken } = await refreshRes.json() as {
-    accessToken: string;
-    refreshToken: string;
-  };
-  setTokens(accessToken, newRefreshToken);
-
   // Retry the original request with the new access token
   return fetch(input, {
     ...init,
-    headers: {
-      ...getAuthHeaders(),
-      ...(init?.headers ?? {}),
-    },
+    headers: mergeHeaders(getAuthHeaders(), init?.headers),
   });
 }
 
@@ -107,15 +141,31 @@ export function formatCuisine(raw: string): string {
     .join(" ");
 }
 
+function parseHourMinute(t: string): number {
+  const m = t.match(/(\d{1,2}):(\d{2})\s*([AP]M)/i);
+  if (!m) return 0;
+  let h = parseInt(m[1]);
+  const min = parseInt(m[2]);
+  const pm = m[3].toUpperCase() === "PM";
+  if (pm && h !== 12) h += 12;
+  if (!pm && h === 12) h = 0;
+  return h * 60 + min;
+}
+
+/** Formats minutes-since-midnight (mod 24h) as "h:mm AM/PM". */
+function formatMinutes(totalMin: number): string {
+  const h = Math.floor(totalMin / 60) % 24;
+  const mn = totalMin % 60;
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${h > 12 ? h - 12 : h || 12}:${String(mn).padStart(2, "0")} ${ampm}`;
+}
+
 /** Parse opening hours string and return open status for right now. */
 export function getOpenStatus(openingHours: string | null | undefined): {
   label: string;
   open: boolean | null; // null = unknown
 } {
   if (!openingHours) return { label: "", open: null };
-
-  const lower = openingHours.toLowerCase();
-  if (lower.includes("24 hours") || lower.includes("open 24")) return { label: "Open 24h", open: true };
 
   const days = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
   const today = days[new Date().getDay()];
@@ -125,37 +175,31 @@ export function getOpenStatus(openingHours: string | null | undefined): {
   const line = openingHours.split("\n").find((l) => l.toLowerCase().startsWith(today));
   if (!line) return { label: "", open: null };
 
-  if (line.toLowerCase().includes("closed")) return { label: "Closed today", open: false };
+  // Scoped to today's line, not the whole multi-day string -- otherwise a
+  // single 24-hour day anywhere in the week made every day report "Open 24h".
+  const lowerLine = line.toLowerCase();
+  if (lowerLine.includes("24 hours") || lowerLine.includes("open 24")) return { label: "Open 24h", open: true };
+  if (lowerLine.includes("closed")) return { label: "Closed today", open: false };
 
-  // Parse "11:00 AM – 10:00 PM" style ranges
-  const rangeMatch = line.match(/(\d{1,2}:\d{2}\s*[AP]M)\s*[–\-]\s*(\d{1,2}:\d{2}\s*[AP]M)/i);
-  if (!rangeMatch) return { label: "", open: null };
-
-  const toMin = (t: string) => {
-    const m = t.match(/(\d{1,2}):(\d{2})\s*([AP]M)/i);
-    if (!m) return 0;
-    let h = parseInt(m[1]);
-    const min = parseInt(m[2]);
-    const pm = m[3].toUpperCase() === "PM";
-    if (pm && h !== 12) h += 12;
-    if (!pm && h === 12) h = 0;
-    return h * 60 + min;
-  };
-
-  const open  = toMin(rangeMatch[1]);
-  let   close = toMin(rangeMatch[2]);
-  if (close < open) close += 24 * 60; // past midnight
-
-  if (now < open) {
-    const h = Math.floor(open / 60), mn = open % 60;
-    const ampm = h >= 12 ? "PM" : "AM";
-    const disp = `${h > 12 ? h - 12 : h || 12}:${String(mn).padStart(2, "0")} ${ampm}`;
-    return { label: `Opens ${disp}`, open: false };
+  // Parse every "11:00 AM – 10:00 PM" range on the line, not just the first --
+  // Google commonly reports split hours as e.g.
+  // "Monday: 11:00 AM – 2:00 PM, 5:00 PM – 9:00 PM", and matching only the
+  // first range reported "Closed now" during the second seating.
+  const rangeRegex = /(\d{1,2}:\d{2}\s*[AP]M)\s*[–\-]\s*(\d{1,2}:\d{2}\s*[AP]M)/gi;
+  const ranges: Array<{ open: number; close: number }> = [];
+  for (const m of line.matchAll(rangeRegex)) {
+    const open  = parseHourMinute(m[1]);
+    let   close = parseHourMinute(m[2]);
+    if (close < open) close += 24 * 60; // past midnight
+    ranges.push({ open, close });
   }
-  if (now >= close) return { label: "Closed now", open: false };
+  if (ranges.length === 0) return { label: "", open: null };
 
-  const h = Math.floor(close / 60) % 24, mn = close % 60;
-  const ampm = h >= 12 ? "PM" : "AM";
-  const disp = `${h > 12 ? h - 12 : h || 12}:${String(mn).padStart(2, "0")} ${ampm}`;
-  return { label: `Open until ${disp}`, open: true };
+  const activeRange = ranges.find((r) => now >= r.open && now < r.close);
+  if (activeRange) return { label: `Open until ${formatMinutes(activeRange.close)}`, open: true };
+
+  const nextRange = ranges.filter((r) => r.open > now).sort((a, b) => a.open - b.open)[0];
+  if (nextRange) return { label: `Opens ${formatMinutes(nextRange.open)}`, open: false };
+
+  return { label: "Closed now", open: false };
 }

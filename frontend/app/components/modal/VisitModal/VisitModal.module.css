@@ -17,7 +17,7 @@
 .overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(29, 24, 20, 0.45);
   backdrop-filter: blur(4px);
 }
 
@@ -25,11 +25,11 @@
   position: relative;
   width: 100%;
   max-width: 28rem;
-  border-radius: 1.5rem;
-  border: 1px solid #2c2420;
-  background: #161210;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-card);
   padding: 1.5rem;
-  box-shadow: 0 0 80px rgba(0, 0, 0, 0.7);
+  box-shadow: var(--shadow-lg);
 }
 
 .closeBtn {
@@ -42,30 +42,30 @@
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: #201a16;
+  background: var(--color-surface-elevated);
   border: none;
   cursor: pointer;
-  color: #5c504a;
+  color: var(--color-text-muted);
   transition: all 0.2s;
 }
 
 .closeBtn:hover {
-  color: #f6f0e8;
-  background: #2c2420;
+  color: var(--color-text-primary);
+  background: #ede0d5;
 }
 
 .title {
   padding-right: 2rem;
   font-size: 1.125rem;
-  font-weight: 700;
-  color: #f6f0e8;
+  font-weight: 800;
+  color: var(--color-text-primary);
   margin: 0;
 }
 
 .subtitle {
   margin-top: 0.25rem;
   font-size: 0.875rem;
-  color: #5c504a;
+  color: var(--color-text-muted);
 }
 
 /* View mode */
@@ -81,9 +81,9 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  border-radius: 1rem;
-  background: #201a16;
-  border: 1px solid #2c2420;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
   padding: 0.75rem 1rem;
 }
 
@@ -94,43 +94,43 @@
 
 .experienceLabel {
   font-size: 0.625rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #5c504a;
+  color: var(--color-text-muted);
 }
 
 .experienceValue {
   font-size: 0.875rem;
-  font-weight: 600;
-  color: #f6f0e8;
+  font-weight: 700;
+  color: var(--color-text-primary);
   margin-top: 0.1rem;
 }
 
 .notesLabel {
   font-size: 0.625rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #5c504a;
+  color: var(--color-text-muted);
   margin-bottom: 0.375rem;
 }
 
 .notesText {
   white-space: pre-wrap;
-  border-radius: 1rem;
-  background: #201a16;
-  border: 1px solid #2c2420;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  color: #9a8a78;
+  color: var(--color-text-secondary);
   line-height: 1.6;
   margin: 0;
 }
 
 .noReview {
   font-size: 0.875rem;
-  color: #5c504a;
+  color: var(--color-text-muted);
 }
 
 /* Edit/Add mode */
@@ -146,7 +146,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #5c504a;
+  color: var(--color-text-muted);
   margin-bottom: 0.75rem;
 }
 
@@ -161,27 +161,27 @@
   flex-direction: column;
   align-items: center;
   gap: 0.375rem;
-  border-radius: 1rem;
-  border: 1px solid #2c2420;
-  background: #201a16;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
   padding: 0.75rem 0.25rem;
   font-size: 0.75rem;
-  font-weight: 600;
-  color: #5c504a;
+  font-weight: 700;
+  color: var(--color-text-muted);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .ratingBtn:hover {
-  color: #9a8a78;
-  border-color: #3c3228;
-  background: #261f1b;
+  color: var(--color-text-secondary);
+  border-color: rgba(29, 34, 48, 0.2);
+  background: #ede0d5;
 }
 
 .ratingBtn.selected {
-  border-color: rgba(249, 115, 22, 0.4);
-  background: rgba(249, 115, 22, 0.12);
-  color: #f97316;
+  border-color: rgba(255, 90, 54, 0.45);
+  background: rgba(255, 90, 54, 0.1);
+  color: var(--color-accent-dark);
 }
 
 .ratingEmoji {
@@ -193,12 +193,12 @@
   width: 100%;
   min-height: 5.5rem;
   resize: vertical;
-  border-radius: 1rem;
-  border: 1px solid #2c2420;
-  background: #201a16;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-bg);
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  color: #f6f0e8;
+  color: var(--color-text-primary);
   line-height: 1.6;
   outline: none;
   transition: all 0.2s;
@@ -206,12 +206,13 @@
 }
 
 .notesInput::placeholder {
-  color: #3c3228;
+  color: var(--color-text-muted);
+  opacity: 0.7;
 }
 
 .notesInput:focus {
-  border-color: rgba(249, 115, 22, 0.4);
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.08);
+  border-color: rgba(255, 90, 54, 0.45);
+  box-shadow: 0 0 0 3px rgba(255, 90, 54, 0.1);
 }
 
 /* Footers */

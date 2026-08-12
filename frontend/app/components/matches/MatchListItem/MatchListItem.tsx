@@ -21,7 +21,7 @@ export default function MatchListItem({ match, onVisitClick }: MatchListItemProp
       <div className={styles.info}>
         <p className={styles.name}>{restaurant.name}</p>
         <span className={styles.meta}>
-          {formatCuisine(restaurant.cuisine ?? "Restaurant")} · {restaurant.priceLevel}
+          {formatCuisine(restaurant.cuisine)} · {restaurant.priceLevel}
         </span>
 
         {restaurant.address && (
@@ -53,20 +53,18 @@ export default function MatchListItem({ match, onVisitClick }: MatchListItemProp
             </svg>
           </a>
         )}
-        {match.swipeId && (
-          visitedAt ? (
-            <button type="button" className={styles.reviewBtn} onClick={onVisitClick} aria-label="View your review">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-              Review
-            </button>
-          ) : (
-            <button type="button" className={styles.beenBtn} onClick={onVisitClick}>
-              Been here?
-            </button>
-          )
+        {visitedAt ? (
+          <button type="button" className={styles.reviewBtn} onClick={onVisitClick} aria-label="View your review">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            Review
+          </button>
+        ) : (
+          <button type="button" className={styles.beenBtn} onClick={onVisitClick}>
+            Been here?
+          </button>
         )}
       </div>
     </div>

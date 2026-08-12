@@ -2,7 +2,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-sm);
   padding: 0.625rem 1.25rem;
   font-size: 0.875rem;
   font-weight: 600;
@@ -25,15 +25,15 @@
 /* ── Variants ─────────────────────────────── */
 
 .primary {
-  background: linear-gradient(to right, #f97316, #ea580c);
+  background: var(--color-accent);
   color: #fff;
-  border: 1px solid rgba(249, 115, 22, 0.2);
-  box-shadow: 0 2px 12px rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(255, 90, 54, 0.25);
+  box-shadow: var(--shadow-sm);
 }
 
 .primary:hover {
-  background: linear-gradient(to right, #fb923c, #f97316);
-  box-shadow: 0 0 28px rgba(249, 115, 22, 0.4);
+  background: var(--color-accent-light);
+  box-shadow: var(--shadow-lg);
 }
 
 .primary:active {
@@ -41,14 +41,14 @@
 }
 
 .secondary {
-  background: #1e1815;
-  color: #f6f0e8;
-  border: 1px solid #2c2420;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
 }
 
 .secondary:hover {
-  background: #261f1b;
-  border-color: #3c3228;
+  background: #ede0d5;
+  border-color: rgba(29, 34, 48, 0.18);
 }
 
 .secondary:active {
@@ -57,14 +57,14 @@
 
 .outline {
   background: transparent;
-  color: #9a8a78;
-  border: 1px solid #2c2420;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
 }
 
 .outline:hover {
-  color: #f6f0e8;
-  border-color: #4c3c30;
-  background: #1e1815;
+  color: var(--color-text-primary);
+  border-color: rgba(29, 34, 48, 0.22);
+  background: var(--color-surface-elevated);
 }
 
 .outline:active {
@@ -73,13 +73,13 @@
 
 .ghost {
   background: transparent;
-  color: #9a8a78;
+  color: var(--color-text-secondary);
   border: 1px solid transparent;
 }
 
 .ghost:hover {
-  color: #f6f0e8;
-  background: #1e1815;
+  color: var(--color-text-primary);
+  background: var(--color-surface-elevated);
 }
 
 .ghost:active {
@@ -88,14 +88,13 @@
 
 .pass {
   background: transparent;
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--color-pass);
+  border: 1px solid rgba(185, 28, 28, 0.28);
 }
 
 .pass:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.5);
-  box-shadow: 0 0 16px rgba(239, 68, 68, 0.2);
+  background: rgba(185, 28, 28, 0.08);
+  border-color: rgba(185, 28, 28, 0.45);
 }
 
 .pass:active {
@@ -103,15 +102,14 @@
 }
 
 .like {
-  background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  background: rgba(22, 163, 74, 0.08);
+  color: var(--color-like);
+  border: 1px solid rgba(22, 163, 74, 0.28);
 }
 
 .like:hover {
-  background: rgba(34, 197, 94, 0.2);
-  border-color: rgba(34, 197, 94, 0.5);
-  box-shadow: 0 0 16px rgba(34, 197, 94, 0.2);
+  background: rgba(22, 163, 74, 0.16);
+  border-color: rgba(22, 163, 74, 0.45);
 }
 
 .like:active {
@@ -119,13 +117,13 @@
 }
 
 .danger {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(185, 28, 28, 0.08);
+  color: var(--color-pass);
+  border: 1px solid rgba(185, 28, 28, 0.28);
 }
 
 .danger:hover {
-  background: rgba(239, 68, 68, 0.2);
+  background: rgba(185, 28, 28, 0.16);
 }
 
 .danger:active {

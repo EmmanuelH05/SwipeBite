@@ -12,3 +12,18 @@ export const SWIPE_THRESHOLD = 80;
 
 /** Movement (px) before we lock to card swipe vs. photo scroll. */
 export const GESTURE_LOCK_THRESHOLD = 12;
+
+/** Horizontal translate distance (%) for the swipe-exit animation. */
+export const SWIPE_EXIT_DISTANCE_PERCENT = 120;
+
+/** Rotation (deg) applied at full swipe-exit. */
+export const SWIPE_EXIT_ROTATION_DEG = 12;
+
+/** Rotation (deg) applied per pixel of horizontal drag while dragging. */
+export const DRAG_ROTATION_FACTOR = 0.06;
+
+/** How long the swipe-exit animation plays before the swipe is committed (ms). */
+export const SWIPE_EXIT_DURATION_MS = 220;
+
+/** How long the snap-back-to-center transition plays before inline styles are cleared (ms). */
+export const SNAP_BACK_DURATION_MS = 260;

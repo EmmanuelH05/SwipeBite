@@ -27,7 +27,6 @@ model UserPreference {
   likedCuisines    Json      @default("{}")
   dislikedCuisines Json      @default("{}")
   priceCounts      Json      @default("{}")
-  avgDistance      Float     @default(0)
   totalLikes       Int       @default(0)
   totalDislikes    Int       @default(0)
   morningLikes     Int       @default(0)
@@ -66,7 +65,6 @@ model RefreshToken {
   revokedAt DateTime?
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([token])
   @@index([userId])
   @@map("refresh_tokens")
 }

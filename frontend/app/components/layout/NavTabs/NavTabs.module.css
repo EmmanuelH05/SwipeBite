@@ -2,9 +2,9 @@
   position: relative;
   display: flex;
   gap: 0.25rem;
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
   padding: 0.3rem;
   margin-bottom: 1.25rem;
 }
@@ -12,20 +12,20 @@
 .tab {
   position: relative;
   flex: 1;
-  border-radius: 0.6875rem;
-  padding: 0.5625rem 0.5rem;
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 0.5rem;
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 700;
   background: transparent;
   border: none;
   cursor: pointer;
   transition: color 0.2s;
   z-index: 10;
-  color: #5c504a;
+  color: var(--color-text-muted);
 }
 
 .tab.active {
-  color: #f6f0e8;
+  color: var(--color-text-primary);
 }
 
 .tabInner {
@@ -40,10 +40,10 @@
 .pill {
   position: absolute;
   inset: 0;
-  border-radius: 0.6875rem;
-  background: linear-gradient(135deg, rgba(249, 115, 22, 0.15) 0%, rgba(234, 88, 12, 0.1) 100%);
-  border: 1px solid rgba(249, 115, 22, 0.22);
-  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.1);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  border: 1px solid rgba(255, 90, 54, 0.25);
+  box-shadow: var(--shadow-sm);
 }
 
 .badge {
@@ -51,12 +51,11 @@
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: rgba(249, 115, 22, 0.25);
-  border: 1px solid rgba(249, 115, 22, 0.3);
+  background: var(--color-accent);
   padding: 0.125rem 0.4rem;
   font-size: 0.625rem;
   font-weight: 700;
-  color: #f97316;
+  color: #fff;
   min-width: 1.125rem;
   line-height: 1;
 }

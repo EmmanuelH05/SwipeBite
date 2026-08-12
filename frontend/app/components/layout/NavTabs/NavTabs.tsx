@@ -35,7 +35,7 @@ const tabs: { id: View; label: string; icon: React.ReactNode }[] = [
 
 export default function NavTabs({ view, matchesCount, onViewChange }: NavTabsProps) {
   return (
-    <nav aria-label="Main navigation" className={styles.nav}>
+    <nav aria-label="Main navigation" role="tablist" className={styles.nav}>
       {tabs.map((tab) => {
         const isActive = view === tab.id;
         return (
