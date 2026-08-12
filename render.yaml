@@ -1,6 +1,8 @@
 # Render Blueprint — provisions the SwipeBite Postgres database and Express API.
 # Deploy: Render dashboard → New → Blueprint → point at this repo.
-# The build auto-migrates and seeds the DB, so the app is usable immediately.
+# Migrations + seeding run in preDeployCommand (not buildCommand) so the app is
+# usable immediately, without racing the database's own startup -- see the
+# comment on preDeployCommand below.
 # Required secret: JWT_SECRET. Optional: GOOGLE_API_KEY (only needed to let users
 # load MORE restaurants beyond the seeded catalog — leave blank to skip).
 # Frontend deploys separately on Vercel (root dir: frontend) — see README.
@@ -18,8 +20,17 @@ services:
     plan: free
     rootDir: backend
     # --include=dev: NODE_ENV=production (set below) would otherwise skip the
-    # devDependencies (tsc, tsx) that the build and seed step need.
-    buildCommand: npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build && npx prisma db seed
+    # devDependencies (tsc, tsx) that the build and preDeploy step need.
+    buildCommand: npm install --include=dev && npx prisma generate && npm run build
+    # Render runs this after the build, once the database is confirmed
+    # reachable -- unlike buildCommand, which starts as soon as the build
+    # container is up and can race a freshly-provisioned database that
+    # hasn't finished starting yet (this is what failed on the first deploy
+    # of this blueprint: P1001 "Can't reach database server", because
+    # migrate deploy was running from buildCommand). `prisma generate` stays
+    # in buildCommand since it only reads schema.prisma and needs no DB
+    # connection -- npm run build (tsc) needs its generated types.
+    preDeployCommand: npx prisma migrate deploy && npx prisma db seed
     startCommand: npm run start
     healthCheckPath: /health
     envVars:
