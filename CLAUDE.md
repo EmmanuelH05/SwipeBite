@@ -173,14 +173,14 @@ These are deferred — valid but not deployment-blocking:
 
 ---
 
-## Branch History: `refactor/codebase-cleanup` (2026-08-10)
+## Branch History: `refactor/codebase-cleanup` (merged 2026-08-11)
 
-A full-codebase audit + fix pass, pushed to `origin/refactor/codebase-cleanup` (PR not yet opened: https://github.com/EmmanuelH05/SwipeBite/pull/new/refactor/codebase-cleanup). 62 atomic commits, one issue per commit, each verified with `tsc --noEmit` + `bun test` (backend) or `tsc --noEmit` + code review (frontend — no test runner exists yet).
+A full-codebase audit + fix pass. 62 atomic commits, one issue per commit, each verified with `tsc --noEmit` + `bun test` (backend) or `tsc --noEmit` + code review (frontend — no test runner existed yet at the time). Opened as PR #2 and merged into `main` via merge commit `1632088` on 2026-08-11 — the branch is gone from `origin`, this section is historical record only.
 
 **How it happened:** four parallel review agents (backend code-reviewer, frontend code-reviewer, silent-failure-hunter, type-design-analyzer) audited the whole codebase and surfaced ~74 findings. Fixed in two passes:
 1. **Critical + High (21 commits):** things that could actually break — an unbounded rejection-sampling loop that could hang the server, spoofable rate limiters, a frontend token-refresh race that logged users out, silently dropped failed swipes, a scoring bug where onboarding's seeded taste profile vanished after the first real swipe, non-monotonic price scoring, unvalidated `experience`/`cuisines` input, a desynced dislike counter, silent preference-update failures, a Google Places loader that reported partial results as full success, a missing React `key` causing state leakage between swipe cards, and more. An independent review pass on that diff caught two real regressions introduced by the fixes themselves (a double-counting bug in the onboarding-seed merge, and a rate-limiter default that was still bypassable in this repo's own `docker-compose.yml` topology) — both corrected before merge-readiness.
 2. **Medium + Low (40 commits):** the rest — duplication, dead code, type-design gaps, a11y issues, stale comments, and the write/read key-space bug described in Key Invariants above.
 
-**Net effect:** ~1,430 lines added, ~640 removed, across 47 files. Two new Prisma migrations (see Remaining Improvements #10, unverified against a live DB). No new runtime dependencies added anywhere. Nothing left in the original audit's list.
+**Net effect:** ~1,430 lines added, ~640 removed, across 47 files. No new runtime dependencies added anywhere. Nothing left in the original audit's list.
 
-**What to do with this branch:** review the commit log (`git log --oneline main..refactor/codebase-cleanup`), open the PR, merge when satisfied. If DB access becomes available before merging, running the two pending migrations and the DB-dependent test suites (register/login/refresh, swipe/preference transactions) would close out the last verification gaps noted above.
+The two Prisma migrations this branch introduced were verified against a live DB the same day (see Remaining Improvements #10), and the DB-dependent test suites (register/login/refresh, swipe/preference transactions, onboarding-seed, restaurant upsert) were added right after — see the Test coverage note above. Both follow-ups this section used to flag as pending are done.
