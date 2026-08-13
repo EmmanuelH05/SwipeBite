@@ -12,15 +12,20 @@ import { apiFetch, setTokens, clearTokens, getAccessToken, getRefreshToken } fro
  * already valid (same JWT verification as every other request), so it can't
  * grant access to anything a stolen/guessed token pair couldn't already get.
  */
-function injectDemoTokensFromUrl(): void {
-  if (typeof window === "undefined") return;
+/** Pure read of the URL's demo-token params, with no side effects -- safe to call during render. */
+function peekDemoTokensFromUrl(): { at: string; rt: string } | null {
+  if (typeof window === "undefined") return null;
   const params = new URLSearchParams(window.location.search);
   const at = params.get("at");
   const rt = params.get("rt");
-  if (at && rt) {
-    setTokens(at, rt);
-    window.history.replaceState({}, "", "/");
-  }
+  return at && rt ? { at, rt } : null;
+}
+
+function injectDemoTokensFromUrl(): void {
+  const demo = peekDemoTokensFromUrl();
+  if (!demo) return;
+  setTokens(demo.at, demo.rt);
+  window.history.replaceState({}, "", "/");
 }
 
 type UseAuthParams = {
@@ -36,12 +41,19 @@ export function useAuth({ setLoading, setError }: UseAuthParams) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [authLoading, setAuthLoading] = useState(true);
+  // Computed synchronously from what's already on hand at mount (stored
+  // token or a demo-mode URL param) instead of always starting `true` and
+  // synchronously flipping it to `false` in the effect below when there's
+  // nothing to check -- avoids a setState call directly in the effect body
+  // for that branch. peekDemoTokensFromUrl is a pure read (no setTokens/
+  // history mutation), so it's safe to call during render; the actual
+  // side-effecting injectDemoTokensFromUrl still runs only in the effect.
+  const [authLoading, setAuthLoading] = useState(() => !!getAccessToken() || !!peekDemoTokensFromUrl());
 
   useEffect(() => {
     injectDemoTokensFromUrl();
     const token = getAccessToken();
-    if (!token) { setAuthLoading(false); return; }
+    if (!token) return; // authLoading was already initialized to false in this case
     apiFetch(`${API_URL}/auth/me`)
       .then((res) => {
         if (res.ok) return res.json() as Promise<User>;

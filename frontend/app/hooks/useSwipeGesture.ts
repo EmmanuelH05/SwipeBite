@@ -19,6 +19,12 @@ export function useSwipeGesture(
   const [photoIndex, setPhotoIndex] = useState(0);
   const [cardDragOffset, setCardDragOffset] = useState(0);
   const [swipeExit, setSwipeExit] = useState<"LIKE" | "DISLIKE" | null>(null);
+  // Tracks the card id these three state values were last reset for. Deliberately
+  // useState, not useRef: React's documented "adjust state when a prop changes"
+  // pattern allows calling setState during render for exactly this case, but
+  // mutating a *ref* during render is a separate, still-disallowed thing --
+  // using useState here is what makes the block below legal.
+  const [resetForCardId, setResetForCardId] = useState(current?.id);
 
   const photoScrollRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -34,10 +40,18 @@ export function useSwipeGesture(
     cardRef.current.style.transform = `translateX(${dx}px) rotate(${dx * DRAG_ROTATION_FACTOR}deg)`;
   }, []);
 
-  useEffect(() => {
+  // Reset in-progress gesture state for the new top card. State resets happen
+  // right here during render (React-sanctioned for "reset state when a prop
+  // changes"); ref resets can't join them here (refs can't be mutated during
+  // render) so they stay in the effect below instead.
+  if (resetForCardId !== current?.id) {
+    setResetForCardId(current?.id);
     setPhotoIndex(0);
     setCardDragOffset(0);
     setSwipeExit(null);
+  }
+
+  useEffect(() => {
     gestureLockRef.current = null;
     touchStartRef.current = null;
     cardIdRef.current = null;
