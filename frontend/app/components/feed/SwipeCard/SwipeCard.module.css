@@ -119,6 +119,11 @@
 .scoreBadge.mid  .scoreNum { color: var(--color-accent-dark); }
 .scoreBadge.low  .scoreNum { color: var(--color-text-secondary); }
 
+.scoreBadge.learning {
+  border: 1px dashed var(--color-border-subtle);
+}
+.scoreBadge.learning .scoreLabel { color: var(--color-text-muted); }
+
 .scoreNum {
   font-size: 1.15rem;
   font-weight: 800;

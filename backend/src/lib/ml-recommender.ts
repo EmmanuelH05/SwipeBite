@@ -458,6 +458,7 @@ export type MLScoreBreakdown = {
   timeScore: number;
   explorationScore: number;
   cfScore: number | null;
+  cfEligible: boolean;
   explanation: string;
   signals: string[];
 };
@@ -603,6 +604,7 @@ export function hybridScore(input: MLScoreInput): MLScoreBreakdown {
     timeScore:        Math.round(time.score * 100),
     explorationScore: Math.round(exploration * 100),
     cfScore:          cfScore !== null ? Math.round(cfScore * 100) : null,
+    cfEligible:       totalInteractions >= MIN_SWIPES_FOR_CF,
     explanation,
     signals: [
       `cuisine:${Math.round(cuisine.score * 100)}`,

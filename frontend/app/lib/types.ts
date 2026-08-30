@@ -9,6 +9,7 @@ export type ScoreBreakdown = {
   priceScore: number;
   timeScore: number;
   noveltyBonus: number;
+  cfEligible: boolean;
   explanation: string;
 };
 

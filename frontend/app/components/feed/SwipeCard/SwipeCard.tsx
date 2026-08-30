@@ -42,6 +42,7 @@ const SwipeCard = forwardRef<HTMLDivElement, SwipeCardProps>(function SwipeCard(
 
   const scoreClass =
     score && score.total >= 70 ? styles.high : score && score.total >= 50 ? styles.mid : styles.low;
+  const stillLearning = score ? !score.cfEligible : false;
 
   return (
     <div
@@ -98,9 +99,9 @@ const SwipeCard = forwardRef<HTMLDivElement, SwipeCardProps>(function SwipeCard(
 
       {/* Score badge — corner overlay on the photo, not a chip among chips */}
       {score && score.total > 0 && (
-        <div className={`${styles.scoreBadge} ${scoreClass}`}>
+        <div className={`${styles.scoreBadge} ${scoreClass}${stillLearning ? ` ${styles.learning}` : ""}`}>
           <div className={styles.scoreNum}>{Math.round(score.total)}<small>%</small></div>
-          <div className={styles.scoreLabel}>Match</div>
+          <div className={styles.scoreLabel}>{stillLearning ? "Still learning" : "Match"}</div>
         </div>
       )}
 

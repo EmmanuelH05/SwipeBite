@@ -12,6 +12,7 @@ import {
   hybridScore,
   isVisitExperience,
   getTimeSlotForHour,
+  MIN_SWIPES_FOR_CF,
   type SwipeRecord,
   type AllSwipeRecord,
   type TimeSlot,
@@ -367,6 +368,19 @@ describe("hybridScore", () => {
       currentHour: 19,
     });
     expect(tooFew.timeScore).toBe(none.timeScore);
+  });
+
+  test("cfEligible is false one swipe below the CF threshold, true at the threshold", () => {
+    const below = hybridScore({
+      restaurant, weightedProfile: emptyProfile, cfScore: null,
+      totalInteractions: MIN_SWIPES_FOR_CF - 1,
+    });
+    const at = hybridScore({
+      restaurant, weightedProfile: emptyProfile, cfScore: null,
+      totalInteractions: MIN_SWIPES_FOR_CF,
+    });
+    expect(below.cfEligible).toBe(false);
+    expect(at.cfEligible).toBe(true);
   });
 });
 
